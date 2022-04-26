@@ -246,6 +246,20 @@ func Test_getParametersAnnouncement_empty_command(t *testing.T) {
 	assert.Equal(t, []*apiclient.ParameterAnnouncement{{Name: "static-a"}, {Name: "static-b"}}, res.ParameterAnnouncements)
 }
 
+func Test_getParametersAnnouncement_no_command(t *testing.T) {
+	staticYAML := `
+- name: static-a
+- name: static-b
+`
+	static := &[]Static{}
+	err := yaml.Unmarshal([]byte(staticYAML), static)
+	require.NoError(t, err)
+	command := Command{}
+	res, err := getParametersAnnouncement(context.Background(), "", *static, command)
+	require.NoError(t, err)
+	assert.Equal(t, []*apiclient.ParameterAnnouncement{{Name: "static-a"}, {Name: "static-b"}}, res.ParameterAnnouncements)
+}
+
 func Test_getParametersAnnouncement_static_and_dynamic(t *testing.T) {
 	staticYAML := `
 - name: static-a

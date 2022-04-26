@@ -328,9 +328,9 @@ func (s *Service) GetParametersAnnouncement(stream apiclient.ConfigManagementPlu
 }
 
 func getParametersAnnouncement(ctx context.Context, workDir string, staticAnnouncements []Static, command Command) (*apiclient.ParametersAnnouncementResponse, error) {
-	var staticParamAnnouncements []*apiclient.ParameterAnnouncement
+	var announcements []*apiclient.ParameterAnnouncement
 	for _, static := range staticAnnouncements {
-		staticParamAnnouncements = append(staticParamAnnouncements, &apiclient.ParameterAnnouncement{
+		announcements = append(announcements, &apiclient.ParameterAnnouncement{
 			Name:           static.Name,
 			Title:          static.Title,
 			Tooltip:        static.Tooltip,
@@ -343,19 +343,23 @@ func getParametersAnnouncement(ctx context.Context, workDir string, staticAnnoun
 		})
 	}
 
-	stdout, err := runCommand(ctx, command, workDir, os.Environ())
-	if err != nil {
-		return nil, fmt.Errorf("error executing dynamic parameter output command: %s", err)
-	}
+	if len(command.Command) > 0 {
+		stdout, err := runCommand(ctx, command, workDir, os.Environ())
+		if err != nil {
+			return nil, fmt.Errorf("error executing dynamic parameter output command: %s", err)
+		}
 
-	var dynamicParamAnnouncements []*apiclient.ParameterAnnouncement
-	err = json.Unmarshal([]byte(stdout), &dynamicParamAnnouncements)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshaling dynamic parameter output into ParametersAnnouncementResponse: %s", err)
+		var dynamicParamAnnouncements []*apiclient.ParameterAnnouncement
+		err = json.Unmarshal([]byte(stdout), &dynamicParamAnnouncements)
+		if err != nil {
+			return nil, fmt.Errorf("error unmarshaling dynamic parameter output into ParametersAnnouncementResponse: %s", err)
+		}
+
+		announcements = append(announcements, dynamicParamAnnouncements...)
 	}
 
 	repoResponse := &apiclient.ParametersAnnouncementResponse{
-		ParameterAnnouncements: append(staticParamAnnouncements, dynamicParamAnnouncements...),
+		ParameterAnnouncements: announcements,
 	}
 	return repoResponse, nil
 }

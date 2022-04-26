@@ -2,7 +2,15 @@ import {AutocompleteField, DataLoader, FormField, FormSelect, getNestedField} fr
 import * as React from 'react';
 import {FieldApi, FormApi, FormField as ReactFormField, Text, TextArea} from 'react-form';
 
-import {ArrayInputField, CheckboxField, EditablePanel, EditablePanelItem, Expandable, TagsInputField} from '../../../shared/components';
+import {
+    ArrayInputField,
+    CheckboxField,
+    EditablePanel,
+    EditablePanelItem,
+    Expandable,
+    MapInputField,
+    TagsInputField
+} from '../../../shared/components';
 import * as models from '../../../shared/models';
 import {ApplicationSourceDirectory, AuthSettings} from '../../../shared/models';
 import {services} from '../../../shared/services';
@@ -278,6 +286,39 @@ export const ApplicationParameters = (props: {
             view: app.spec.source.plugin && (app.spec.source.plugin.env || []).map(i => `${i.name}='${i.value}'`).join(' '),
             edit: (formApi: FormApi) => <FormField field='spec.source.plugin.env' formApi={formApi} component={ArrayInputField} />
         });
+        if (props.details.plugin.parametersAnnouncement) {
+            for (const announcement of props.details.plugin.parametersAnnouncement) {
+                const liveParam = app.spec.source.plugin.parameters?.find(param => param.name === announcement.name);
+                if (announcement.collectionType === undefined || announcement.collectionType === '' || announcement.collectionType === 'string') {
+                    attributes.push({
+                        title: announcement.title ?? announcement.name,
+                        view: liveParam?.string || announcement.string,
+                        edit: (formApi: FormApi) => (
+                            <FormField
+                                formApi={formApi}
+                                field='spec.source.plugin.parameters'
+                                component={Text}
+                            />
+                        )
+                    });
+                } else if (announcement.collectionType === 'array') {
+                    attributes.push({
+                        title: announcement.title ?? announcement.name,
+                        view: (liveParam?.array || announcement.array || []).join(' '),
+                        edit: (formApi: FormApi) => <FormField field={`spec.source.plugin.parameters`} formApi={formApi} component={ArrayInputField} />
+                    });
+                } else if (announcement.collectionType === 'map') {
+                    const entries = concatMaps(liveParam?.map, announcement.map).entries();
+                    attributes.push({
+                        title: announcement.title ?? announcement.name,
+                        view: Array.from(entries)
+                            .map(([key, value]) => `${key}='${value}'`)
+                            .join(' '),
+                        edit: (formApi: FormApi) => <FormField field={`spec.source.plugin.parameters`} formApi={formApi} component={MapInputField} />
+                    });
+                }
+            }
+        }
     } else if (props.details.type === 'Directory') {
         const directory = app.spec.source.directory || ({} as ApplicationSourceDirectory);
         attributes.push({
@@ -344,3 +385,15 @@ export const ApplicationParameters = (props: {
         />
     );
 };
+
+function concatMaps(...maps: (Map<string, string> | null)[]): Map<string, string> {
+    const newMap = new Map<string, string>();
+    for (const map of maps) {
+        if (map) {
+            for (const entry of Object.entries(map)) {
+                newMap.set(entry[0], entry[1]);
+            }
+        }
+    }
+    return newMap;
+}
