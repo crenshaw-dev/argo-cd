@@ -21,12 +21,13 @@ type PluginConfig struct {
 }
 
 type PluginConfigSpec struct {
-	Version          string   `json:"version"`
-	Init             Command  `json:"init,omitempty"`
-	Generate         Command  `json:"generate"`
-	Discover         Discover `json:"discover"`
-	AllowConcurrency bool     `json:"allowConcurrency"`
-	LockRepo         bool     `json:"lockRepo"`
+	Version          string     `json:"version"`
+	Init             Command    `json:"init,omitempty"`
+	Generate         Command    `json:"generate"`
+	Discover         Discover   `json:"discover"`
+	AllowConcurrency bool       `json:"allowConcurrency"`
+	LockRepo         bool       `json:"lockRepo"`
+	Parameters       Parameters `yaml:"parameters"`
 }
 
 //Discover holds find and fileName
@@ -45,6 +46,30 @@ type Command struct {
 type Find struct {
 	Command
 	Glob string `json:"glob"`
+}
+
+// Parameters holds static and dynamic configurations
+type Parameters struct {
+	Static  []Static `yaml:"static"`
+	Dynamic Command  `yaml:"dynamic"`
+}
+
+// Static hold the static announcements for CMP's
+type Static struct {
+	Name           string            `yaml:"name,omitempty"`
+	Title          string            `yaml:"title,omitempty"`
+	Tooltip        string            `yaml:"tooltip,omitempty"`
+	Required       bool              `yaml:"required,omitempty"`
+	ItemType       string            `yaml:"itemType,omitempty"`
+	CollectionType string            `yaml:"collectionType,omitempty"`
+	String         string            `yaml:"string,omitempty"`
+	Array          []string          `yaml:"array,omitempty"`
+	Map            map[string]string `yaml:"map,omitempty"`
+}
+
+// Dynamic hold the dynamic announcements for CMP's
+type Dynamic struct {
+	Command
 }
 
 func ReadPluginConfig(filePath string) (*PluginConfig, error) {
