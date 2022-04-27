@@ -275,10 +275,10 @@ func Test_getParametersAnnouncement_static_and_dynamic(t *testing.T) {
 	res, err := getParametersAnnouncement(context.Background(), "", *static, command)
 	require.NoError(t, err)
 	expected := []*apiclient.ParameterAnnouncement{
-		{Name: "static-a"},
-		{Name: "static-b"},
 		{Name: "dynamic-a"},
 		{Name: "dynamic-b"},
+		{Name: "static-a"},
+		{Name: "static-b"},
 	}
 	assert.Equal(t, expected, res.ParameterAnnouncements)
 }
@@ -291,4 +291,14 @@ func Test_getParametersAnnouncement_invalid_json(t *testing.T) {
 	_, err := getParametersAnnouncement(context.Background(), "", []Static{}, command)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected end of JSON input")
+}
+
+func Test_getParametersAnnouncement_bad_command(t *testing.T) {
+	command := Command{
+		Command: []string{"exit"},
+		Args:    []string{"1"},
+	}
+	_, err := getParametersAnnouncement(context.Background(), "", []Static{}, command)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "error executing dynamic parameter output command")
 }

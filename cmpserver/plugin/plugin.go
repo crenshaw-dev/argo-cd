@@ -359,7 +359,8 @@ func getParametersAnnouncement(ctx context.Context, appDir string, staticAnnounc
 			return nil, fmt.Errorf("error unmarshaling dynamic parameter output into ParametersAnnouncementResponse: %s", err)
 		}
 
-		announcements = append(announcements, dynamicParamAnnouncements...)
+		// dynamic goes first, because static should take precedence by being later.
+		announcements = append(dynamicParamAnnouncements, announcements...)
 	}
 
 	repoResponse := &apiclient.ParametersAnnouncementResponse{
