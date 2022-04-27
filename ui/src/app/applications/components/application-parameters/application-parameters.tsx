@@ -2,15 +2,7 @@ import {AutocompleteField, DataLoader, FormField, FormSelect, getNestedField} fr
 import * as React from 'react';
 import {FieldApi, FormApi, FormField as ReactFormField, Text, TextArea} from 'react-form';
 
-import {
-    ArrayInputField,
-    CheckboxField,
-    EditablePanel,
-    EditablePanelItem,
-    Expandable,
-    MapInputField,
-    TagsInputField
-} from '../../../shared/components';
+import {ArrayInputField, CheckboxField, EditablePanel, EditablePanelItem, Expandable, TagsInputField} from '../../../shared/components';
 import * as models from '../../../shared/models';
 import {ApplicationSourceDirectory, AuthSettings} from '../../../shared/models';
 import {services} from '../../../shared/services';
@@ -293,28 +285,25 @@ export const ApplicationParameters = (props: {
                     attributes.push({
                         title: announcement.title ?? announcement.name,
                         view: liveParam?.string || announcement.string,
-                        edit: (formApi: FormApi) => (
-                            <FormField
-                                formApi={formApi}
-                                field='spec.source.plugin.parameters'
-                                component={Text}
-                            />
-                        )
+                        edit: () => liveParam?.string || announcement.string
                     });
                 } else if (announcement.collectionType === 'array') {
                     attributes.push({
                         title: announcement.title ?? announcement.name,
                         view: (liveParam?.array || announcement.array || []).join(' '),
-                        edit: (formApi: FormApi) => <FormField field={`spec.source.plugin.parameters`} formApi={formApi} component={ArrayInputField} />
+                        edit: () => (liveParam?.array || announcement.array || []).join(' ')
                     });
                 } else if (announcement.collectionType === 'map') {
-                    const entries = concatMaps(liveParam?.map, announcement.map).entries();
+                    const entries = concatMaps(announcement.map, liveParam?.map).entries();
                     attributes.push({
                         title: announcement.title ?? announcement.name,
                         view: Array.from(entries)
                             .map(([key, value]) => `${key}='${value}'`)
                             .join(' '),
-                        edit: (formApi: FormApi) => <FormField field={`spec.source.plugin.parameters`} formApi={formApi} component={MapInputField} />
+                        edit: () =>
+                            Array.from(entries)
+                                .map(([key, value]) => `${key}='${value}'`)
+                                .join(' ')
                     });
                 }
             }
@@ -386,6 +375,7 @@ export const ApplicationParameters = (props: {
     );
 };
 
+// concatMaps merges two maps. Later args take precedence where there's a key conflict.
 function concatMaps(...maps: (Map<string, string> | null)[]): Map<string, string> {
     const newMap = new Map<string, string>();
     for (const map of maps) {
