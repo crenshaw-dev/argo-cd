@@ -161,6 +161,8 @@ Plugin commands have access to
 3. Variables in the Application spec (References to system and build variables will get interpolated in the variables' values):
 
    ```yaml
+   apiVersion: argoproj.io/v1alpha1
+   kind: Application
    spec:
      source:
        plugin:
@@ -174,6 +176,8 @@ Plugin commands have access to
 4. (Starting in v2.4) Parameters in the Application spec:
 
    ```yaml
+   apiVersion: argoproj.io/v1alpha1
+   kind: Application
    spec:
      source:
        plugin:
@@ -191,6 +195,11 @@ Plugin commands have access to
    ```json
    [{"name": "values-files", "array": ["values-dev.yaml"]}, {"name": "helm-parameters", "map": {"image.tag": "v1.2.3"}}]
    ```
+
+   !!! note
+       Parameter announcements, even if they specify defaults, are _not_ sent to the plugin in `ARGOCD_APP_PARAMETERS`.
+       Only parameters explicitly set in the Application spec are sent to the plugin. It is up to the plugin to apply
+       the same defaults as the ones announced to the UI.
    
    The same parameters are also available as individual environment variables. The names of the environment variables
    follows this convention:
