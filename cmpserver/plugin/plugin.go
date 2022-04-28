@@ -143,20 +143,31 @@ func environ(envVars []*apiclient.EnvEntry) []string {
 	return environ
 }
 
+// getTempDirMustCleanup creates a temporary directory and returns a cleanup function. The cleanup function panics if
+// cleanup fails. Use this function when failing to clean up the temporary directory is a security risk.
+func getTempDirMustCleanup(baseDir string) (workDir string, cleanup func(), err error) {
+	workDir, err = files.CreateTempDir(baseDir)
+	if err != nil {
+		return "", nil, fmt.Errorf("error creating temp dir: %s", err)
+	}
+	cleanup = func() {
+		if err := os.RemoveAll(workDir); err != nil {
+			// we panic here as the workDir may contain sensitive information
+			panic(fmt.Sprintf("error removing plugin workdir: %s", err))
+		}
+	}
+	return workDir, cleanup, nil
+}
+
 // GenerateManifest runs generate command from plugin config file and returns generated manifest files
 func (s *Service) GenerateManifest(stream apiclient.ConfigManagementPluginService_GenerateManifestServer) error {
 	ctx, cancel := buffered_context.WithEarlierDeadline(stream.Context(), cmpTimeoutBuffer)
 	defer cancel()
-	workDir, err := files.CreateTempDir(common.GetCMPWorkDir())
+	workDir, cleanup, err := getTempDirMustCleanup(common.GetCMPWorkDir())
 	if err != nil {
-		return fmt.Errorf("error creating temp dir: %s", err)
+		return fmt.Errorf("error creating workdir for manifest generation: %s", err)
 	}
-	defer func() {
-		if err := os.RemoveAll(workDir); err != nil {
-			// we panic here as the workDir may contain sensitive information
-			panic(fmt.Sprintf("error removing generate manifest workdir: %s", err))
-		}
-	}()
+	defer cleanup()
 
 	metadata, err := cmp.ReceiveRepoStream(ctx, stream, workDir)
 	if err != nil {
@@ -222,16 +233,11 @@ func (s *Service) MatchRepository(stream apiclient.ConfigManagementPluginService
 	bufferedCtx, cancel := buffered_context.WithEarlierDeadline(stream.Context(), cmpTimeoutBuffer)
 	defer cancel()
 
-	workDir, err := files.CreateTempDir(common.GetCMPWorkDir())
+	workDir, cleanup, err := getTempDirMustCleanup(common.GetCMPWorkDir())
 	if err != nil {
-		return fmt.Errorf("error creating match repository workdir: %s", err)
+		return fmt.Errorf("error creating workdir for repository matching: %s", err)
 	}
-	defer func() {
-		if err := os.RemoveAll(workDir); err != nil {
-			// we panic here as the workDir may contain sensitive information
-			panic(fmt.Sprintf("error removing match repository workdir: %s", err))
-		}
-	}()
+	defer cleanup()
 
 	_, err = cmp.ReceiveRepoStream(bufferedCtx, stream, workDir)
 	if err != nil {
@@ -299,16 +305,11 @@ func (s *Service) GetParametersAnnouncement(stream apiclient.ConfigManagementPlu
 	bufferedCtx, cancel := buffered_context.WithEarlierDeadline(stream.Context(), cmpTimeoutBuffer)
 	defer cancel()
 
-	workDir, err := files.CreateTempDir(common.GetCMPWorkDir())
+	workDir, cleanup, err := getTempDirMustCleanup(common.GetCMPWorkDir())
 	if err != nil {
-		return fmt.Errorf("error creating parameters announcement workdir: %s", err)
+		return fmt.Errorf("error creating workdir for generating parameter announcements: %s", err)
 	}
-	defer func() {
-		if err := os.RemoveAll(workDir); err != nil {
-			// we panic here as the workDir may contain sensitive information
-			panic(fmt.Sprintf("error removing parameters announcement repository workdir: %s", err))
-		}
-	}()
+	defer cleanup()
 
 	metadata, err := cmp.ReceiveRepoStream(bufferedCtx, stream, workDir)
 	if err != nil {

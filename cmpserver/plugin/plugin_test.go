@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -301,4 +302,23 @@ func Test_getParametersAnnouncement_bad_command(t *testing.T) {
 	_, err := getParametersAnnouncement(context.Background(), "", []Static{}, command)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "error executing dynamic parameter output command")
+}
+
+func Test_getTempDirMustCleanup(t *testing.T) {
+	tempDir := t.TempDir()
+	workDir, cleanup, err := getTempDirMustCleanup(tempDir)
+	require.NoError(t, err)
+	require.DirExists(t, workDir)
+
+	// Induce a cleanup error to verify panic behavior.
+	err = os.Chmod(tempDir, 0000)
+	require.NoError(t, err)
+	assert.Panics(t, func() {
+		cleanup()
+	}, "cleanup must panic to protect from directory traversal vulnerabilities")
+
+	err = os.Chmod(tempDir, 0700)
+	require.NoError(t, err)
+	cleanup()
+	assert.NoDirExists(t, workDir)
 }
