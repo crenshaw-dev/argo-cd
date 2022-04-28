@@ -16,6 +16,7 @@ import (
 
 	"github.com/argoproj/argo-cd/v2/cmpserver/apiclient"
 	"github.com/argoproj/argo-cd/v2/common"
+	repoclient "github.com/argoproj/argo-cd/v2/reposerver/apiclient"
 	"github.com/argoproj/argo-cd/v2/util/buffered_context"
 	"github.com/argoproj/argo-cd/v2/util/cmp"
 	"github.com/argoproj/argo-cd/v2/util/io/files"
@@ -332,29 +333,14 @@ func (s *Service) GetParametersAnnouncement(stream apiclient.ConfigManagementPlu
 	return nil
 }
 
-func getParametersAnnouncement(ctx context.Context, appDir string, staticAnnouncements []Static, command Command) (*apiclient.ParametersAnnouncementResponse, error) {
-	var announcements []*apiclient.ParameterAnnouncement
-	for _, static := range staticAnnouncements {
-		announcements = append(announcements, &apiclient.ParameterAnnouncement{
-			Name:           static.Name,
-			Title:          static.Title,
-			Tooltip:        static.Tooltip,
-			Required:       static.Required,
-			ItemType:       static.ItemType,
-			CollectionType: static.CollectionType,
-			String_:        static.String,
-			Array:          static.Array,
-			Map:            static.Map,
-		})
-	}
-
+func getParametersAnnouncement(ctx context.Context, appDir string, announcements []*repoclient.ParameterAnnouncement, command Command) (*apiclient.ParametersAnnouncementResponse, error) {
 	if len(command.Command) > 0 {
 		stdout, err := runCommand(ctx, command, appDir, os.Environ())
 		if err != nil {
 			return nil, fmt.Errorf("error executing dynamic parameter output command: %s", err)
 		}
 
-		var dynamicParamAnnouncements []*apiclient.ParameterAnnouncement
+		var dynamicParamAnnouncements []*repoclient.ParameterAnnouncement
 		err = json.Unmarshal([]byte(stdout), &dynamicParamAnnouncements)
 		if err != nil {
 			return nil, fmt.Errorf("error unmarshaling dynamic parameter output into ParametersAnnouncementResponse: %s", err)
