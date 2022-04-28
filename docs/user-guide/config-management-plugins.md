@@ -35,20 +35,18 @@ spec:
         echo "{\"kind\": \"ConfigMap\", \"apiVersion\": \"v1\", \"metadata\": { \"name\": \"$ARGOCD_APP_NAME\", \"namespace\": \"$ARGOCD_APP_NAMESPACE\", \"annotations\": {\"Foo\": \"$FOO\", \"KubeVersion\": \"$KUBE_VERSION\", \"KubeApiVersion\": \"$KUBE_API_VERSIONS\",\"Bar\": \"baz\"}}}"
   # The discovery config is applied to a repository. If every configured discovery tool matches, then the plugin may be
   # used to generate manifests for Applications using the repository. 
+  # Only one of fileName, find.glob, or find.command should be specified. If multiple are specified then only the 
+  # first (in that order) is evaluated.
   discover:
-    # fileName is a glob pattern that is applied to the repository's root directory (not the Application source 
-    # directory). If there is a match, this plugin may be used for the repository.
-    # Only one of fileName, find.glob, or find.command should be specified. If multiple are specified then only the 
-    # first (in that order) is evaluated.
+    # fileName is a glob pattern (https://pkg.go.dev/path/filepath#Glob) that is applied to the repository's root 
+    # directory (not the Application source directory). If there is a match, this plugin may be used for the repository.
     fileName: "./subdir/s*.yaml"
     find:
       # This does the same thing as fileName, but it supports double-start (nested directory) glob patterns.
       glob: "**/Chart.yaml"
       # The find command runs in the repository's root directory. To match, it must exit with status code 0 _and_ 
       # produce non-empty output to standard out.
-      command:
-        command: []
-        args: []
+      command: [sh, -c, find . -name env.yaml]
   # The parameters config describes what parameters the UI should display for an Application. It is up to the user to
   # actually set parameters in the Application manifest (in spec.source.plugin.parameters). The announcements _only_
   # inform the "Parameters" tab in the App Details page of the UI.
@@ -86,9 +84,7 @@ spec:
     dynamic:
       # The command is run in an Application's source directory. Standard output must be JSON matching the schema of the
       # static parameter announcements list.
-      command:
-        command: [echo]
-        args: ['[{"name": "example-param", "string": "default-string-value"}]']
+      command: [echo, '[{"name": "example-param", "string": "default-string-value"}]']
 ```
 
 !!! note
