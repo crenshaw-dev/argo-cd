@@ -22,7 +22,7 @@ To use Kustomize with an overlay, point your path to the overlay.
 ## Patches
 Patches are a way to kustomize resources using inline configurations in ArgoCD applications.  This allows for kustomizing without  kustomization file.  `patches`  follow the same logic as the corresponding Kustomization.  Any patches that target existing Kustomization file will be merged.
 
-The following Kustomization manifest can be used as example.
+The following Kustomization can be done similarly in an ArgoCD application.
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -41,7 +41,7 @@ patches:
         path: /spec/template/spec/containers/0/ports/0/containerPort
         value: 443
 ```
-The following is similar and clone the repository, use the specified path, then kustomize.
+Application will clone the repository, use the specified path, then kustomize using inline patches configuration.
 ```yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
