@@ -20,9 +20,9 @@ To use Kustomize with an overlay, point your path to the overlay.
     If you're generating resources, you should read up how to ignore those generated resources using the [`IgnoreExtraneous` compare option](compare-options.md).
 
 ## Patches
-Patches are a way to kustomize resources using inline configurations in ArgoCD applications.  This allows for kustomizing without  kustomization file.  `patches`  follow the same logic as the corresponding Kustomization.  Any patches that target existing Kustomization file will be merged.
+Patches are a way to kustomize resources using inline configurations in Argo CD applications.  This allows for kustomizing without  kustomization file.  `patches`  follow the same logic as the corresponding Kustomization.  Any patches that target existing Kustomization file will be merged.
 
-The following Kustomization can be done similarly in an ArgoCD application.
+The following Kustomization can be done similarly in an Argo CD application.
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
