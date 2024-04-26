@@ -1578,7 +1578,7 @@ func (ctrl *ApplicationController) processAppRefreshQueueItem() (processNext boo
 			}
 
 			// TODO: enable signature verification
-			objs, _, err := ctrl.appStateManager.GetRepoObjs(app, drySources, appLabelKey, revisions, refreshType == appv1.RefreshTypeHard,
+			objs, resp, err := ctrl.appStateManager.GetRepoObjs(app, drySources, appLabelKey, revisions, refreshType == appv1.RefreshTypeHard,
 				comparisonLevel == CompareWithLatestForceResolve, false, project)
 			if err != nil {
 				logCtx.Errorf("Failed to get repo objects: %v", err)
@@ -1603,6 +1603,7 @@ func (ctrl *ApplicationController) processAppRefreshQueueItem() (processNext boo
 				CommitMessage:     fmt.Sprintf("hydrate %s", revision),
 				CommitTime:        time.Now(),
 				Paths:             paths,
+				Commands:          resp[0].Commands,
 			}
 
 			commitService := commit.NewService()
