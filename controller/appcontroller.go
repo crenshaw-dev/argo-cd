@@ -1596,6 +1596,7 @@ func (ctrl *ApplicationController) processAppRefreshQueueItem() (processNext boo
 			}}
 			manifestsRequest := commit.ManifestsRequest{
 				RepoURL:           hydrateToSource.RepoURL,
+				SyncBranch:        app.Spec.SourceHydrator.SyncSource.TargetRevision,
 				TargetBranch:      hydrateToSource.TargetRevision,
 				DrySHA:            revision,
 				CommitAuthorName:  "Michael Crenshaw",

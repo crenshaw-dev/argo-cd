@@ -205,11 +205,9 @@ func (m *appStateManager) GetRepoObjs(app *v1alpha1.Application, sources []v1alp
 			}
 		}
 
-		appName := app.InstanceName(m.namespace)
 		appNamespace := app.Spec.Destination.Namespace
 		apiVersions := argo.APIResourcesToStrings(apiResources, true)
 		if !sendRuntimeState {
-			appName = ""
 			appNamespace = ""
 			apiVersions = nil
 			serverVersion = ""
@@ -224,7 +222,7 @@ func (m *appStateManager) GetRepoObjs(app *v1alpha1.Application, sources []v1alp
 				SyncedRevision:     syncedRevision,
 				Paths:              path.GetAppRefreshPaths(app),
 				AppLabelKey:        appLabelKey,
-				AppName:            appName,
+				AppName:            app.InstanceName(m.namespace),
 				Namespace:          appNamespace,
 				ApplicationSource:  &source,
 				KubeVersion:        serverVersion,
@@ -247,7 +245,7 @@ func (m *appStateManager) GetRepoObjs(app *v1alpha1.Application, sources []v1alp
 			NoCache:            noCache,
 			NoRevisionCache:    noRevisionCache,
 			AppLabelKey:        appLabelKey,
-			AppName:            appName,
+			AppName:            app.InstanceName(m.namespace),
 			Namespace:          appNamespace,
 			ApplicationSource:  &source,
 			KustomizeOptions:   kustomizeOptions,
