@@ -12,7 +12,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    if: github.repository == 'argoproj/argo-cd'
+    if: github.repository == 'crenshaw-dev/argo-cd'
     name: Update Snyk report in the docs directory
     runs-on: ubuntu-22.04
     steps:

@@ -19,7 +19,7 @@ jobs:
   set-vars:
     permissions:
       contents: read
-    if: github.repository == 'argoproj/argo-cd'
+    if: github.repository == 'crenshaw-dev/argo-cd'
     runs-on: ubuntu-22.04
     outputs:
       image-tag: ${{ steps.image.outputs.tag}}
