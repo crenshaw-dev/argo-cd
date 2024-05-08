@@ -113,7 +113,7 @@ changelog:
   filters:
     exclude:
       - '^test:'
-#      - '^.*?Bump(\([[:word:]]+\))?.+$'
+      - '^.*?Bump(\([[:word:]]+\))?.+$'
 #      - '^.*?[Bot](\([[:word:]]+\))?.+$'
 
 
