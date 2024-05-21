@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	goerrors "errors"
 	"fmt"
-	"github.com/argoproj/argo-cd/v2/controller/commit"
 	"math"
 	"math/rand"
 	"net/http"
@@ -16,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/argoproj/argo-cd/v2/controller/commit"
 
 	clustercache "github.com/argoproj/gitops-engine/pkg/cache"
 	"github.com/argoproj/gitops-engine/pkg/diff"
@@ -1842,18 +1843,16 @@ func (ctrl *ApplicationController) hydrate(apps []*appv1.Application, refreshTyp
 	}
 
 	manifestsRequest := commit.ManifestsRequest{
-		RepoURL:           repoURL,
-		SyncBranch:        syncBranch,
-		TargetBranch:      targetBranch,
-		DrySHA:            revision,
-		CommitAuthorName:  "Michael Crenshaw",
-		CommitAuthorEmail: "350466+crenshaw-dev@users.noreply.github.com",
-		CommitMessage:     fmt.Sprintf("[Argo CD Bot] hydrate %s", revision),
-		CommitTime:        time.Now(),
-		Paths:             paths,
+		RepoURL:       repoURL,
+		SyncBranch:    syncBranch,
+		TargetBranch:  targetBranch,
+		DrySHA:        revision,
+		CommitMessage: fmt.Sprintf("[Argo CD Bot] hydrate %s", revision),
+		CommitTime:    time.Now(),
+		Paths:         paths,
 	}
 
-	commitService := commit.NewService()
+	commitService := commit.NewService(ctrl.db)
 	_, err := commitService.Commit(manifestsRequest)
 	if err != nil {
 		return fmt.Errorf("failed to commit hydrated manifests: %w", err)
