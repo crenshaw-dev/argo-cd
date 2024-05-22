@@ -1593,7 +1593,7 @@ func (ctrl *ApplicationController) processAppRefreshQueueItem() (processNext boo
 				restart = true
 			}
 
-			if app.Status.SourceHydrator.HydrateOperation.Status == appv1.HydrateOperationPhaseFailed {
+			if app.Status.SourceHydrator.HydrateOperation != nil && app.Status.SourceHydrator.HydrateOperation.Status == appv1.HydrateOperationPhaseFailed {
 				retryWaitPeriod := 2 * 60 * time.Second
 				if metav1.Now().Sub(app.Status.SourceHydrator.HydrateOperation.FinishedAt.Time) > retryWaitPeriod {
 					logCtx.Info("Retrying failed hydration")
