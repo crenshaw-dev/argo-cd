@@ -81,10 +81,23 @@ func getAppInstallation(g github_app_auth.Authentication) (*ghinstallation.Trans
 	return rt, nil
 }
 
-func getGitHubClient(appInstallation *ghinstallation.Transport) (*github.Client, error) {
+func getGitHubInstallationClient(rt *ghinstallation.Transport) *github.Client {
+	httpClient := http.Client{Transport: rt}
+	client := github.NewClient(&httpClient)
+	return client
+}
+
+func getGitHubAppClient(g github_app_auth.Authentication) (*github.Client, error) {
 	var client *github.Client
 	var err error
-	httpClient := http.Client{Transport: appInstallation}
+
+	// This creates the app authenticated with the bearer JWT, not the installation token.
+	rt, err := ghinstallation.NewAppsTransport(http.DefaultTransport, g.Id, []byte(g.PrivateKey))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create github app: %w", err)
+	}
+
+	httpClient := http.Client{Transport: rt}
 	client = github.NewClient(&httpClient)
 	return client, err
 
@@ -114,16 +127,21 @@ func (s *service) Commit(r ManifestsRequest) (ManifestsResponse, error) {
 		if err != nil {
 			return ManifestsResponse{}, fmt.Errorf("failed to get access token: %w", err)
 		}
-		client, err := getGitHubClient(appInstall)
+		client, err := getGitHubAppClient(info)
 		if err != nil {
 			return ManifestsResponse{}, fmt.Errorf("cannot create github client: %w", err)
 		}
-		user, _, err := client.Users.Get(ctx, "")
+		app, _, err := client.Apps.Get(ctx, "")
+		if err != nil {
+			return ManifestsResponse{}, fmt.Errorf("cannot get app info: %w", err)
+		}
+		appLogin := fmt.Sprintf("%s[bot]", app.GetSlug())
+		user, _, err := getGitHubInstallationClient(appInstall).Users.Get(ctx, appLogin)
 		if err != nil {
 			return ManifestsResponse{}, fmt.Errorf("cannot get app user info: %w", err)
 		}
-		authorName = user.GetName()
-		authorEmail = user.GetEmail()
+		authorName = user.GetLogin()
+		authorEmail = fmt.Sprintf("%d+%s@users.noreply.github.com", user.GetID(), user.GetLogin())
 		basicAuth = fmt.Sprintf("x-access-token:%s", token)
 	} else {
 		logCtx.Warn("No github app credentials were found")
@@ -151,7 +169,7 @@ func (s *service) Commit(r ManifestsRequest) (ManifestsResponse, error) {
 	logCtx.Debugf("Cloning repo %s", r.RepoURL)
 	authRepoUrl := r.RepoURL
 	if basicAuth != "" && strings.HasPrefix(authRepoUrl, "https://github.com/") {
-		authRepoUrl = fmt.Sprintf("https://%s@github.com/%s", basicAuth, strings.TrimPrefix(authRepoUrl, ""))
+		authRepoUrl = fmt.Sprintf("https://%s@github.com/%s", basicAuth, strings.TrimPrefix(authRepoUrl, "https://github.com/"))
 	}
 	err = exec.Command("git", "clone", authRepoUrl, dirPath).Run()
 	if err != nil {
@@ -271,7 +289,7 @@ func (s *service) Commit(r ManifestsRequest) (ManifestsResponse, error) {
 
 	// Clear the repo contents using git rm
 	logCtx.Debug("Clearing repo contents")
-	rmCmd := exec.Command("git", "rm", "-r", ".")
+	rmCmd := exec.Command("git", "clean", "-fdx")
 	rmCmd.Dir = dirPath
 	out, err = rmCmd.CombinedOutput()
 	if err != nil {

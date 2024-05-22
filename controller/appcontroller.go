@@ -1574,15 +1574,17 @@ func (ctrl *ApplicationController) processAppRefreshQueueItem() (processNext boo
 			logCtx.Errorf("Dry source has not been resolved, skipping")
 			return
 		}
-		if app.Status.SourceHydrator.Revision != revision {
-			app.Status.SourceHydrator.Revision = revision
-			app.Status.SourceHydrator.HydrateOperation = &appv1.HydrateOperation{
-				StartedAt:  metav1.Now(),
-				FinishedAt: nil,
-				Status:     appv1.HydrateOperationPhaseRunning,
+		if app.Status.SourceHydrator.Revision != revision || (app.Status.SourceHydrator.HydrateOperation != nil && app.Status.SourceHydrator.HydrateOperation.Status == appv1.HydrateOperationPhaseRunning) {
+			if app.Status.SourceHydrator.HydrateOperation == nil || app.Status.SourceHydrator.HydrateOperation.Status != appv1.HydrateOperationPhaseRunning {
+				app.Status.SourceHydrator.Revision = revision
+				app.Status.SourceHydrator.HydrateOperation = &appv1.HydrateOperation{
+					StartedAt:  metav1.Now(),
+					FinishedAt: nil,
+					Status:     appv1.HydrateOperationPhaseRunning,
+				}
+				ctrl.persistAppStatus(origApp, &app.Status)
+				origApp.Status.SourceHydrator = app.Status.SourceHydrator
 			}
-			ctrl.persistAppStatus(origApp, &app.Status)
-			origApp.Status.SourceHydrator = app.Status.SourceHydrator
 			destinationBranch := app.Spec.SourceHydrator.SyncSource.TargetRevision
 			if app.Spec.SourceHydrator.HydrateTo != nil {
 				destinationBranch = app.Spec.SourceHydrator.HydrateTo.TargetRevision
