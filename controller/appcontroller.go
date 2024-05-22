@@ -18,8 +18,6 @@ import (
 
 	"github.com/argoproj/argo-cd/v2/controller/commit"
 
-	"github.com/argoproj/argo-cd/v2/controller/commit"
-
 	clustercache "github.com/argoproj/gitops-engine/pkg/cache"
 	"github.com/argoproj/gitops-engine/pkg/diff"
 	"github.com/argoproj/gitops-engine/pkg/health"
@@ -1589,9 +1587,21 @@ func (ctrl *ApplicationController) processAppRefreshQueueItem() (processNext boo
 			logCtx.Errorf("Dry source has not been resolved, skipping")
 			return
 		}
-		if app.Status.SourceHydrator.Revision != revision || (app.Status.SourceHydrator.HydrateOperation != nil && app.Status.SourceHydrator.HydrateOperation.Status == appv1.HydrateOperationPhaseRunning) {
-			if app.Status.SourceHydrator.HydrateOperation == nil || app.Status.SourceHydrator.HydrateOperation.Status != appv1.HydrateOperationPhaseRunning {
-				app.Status.SourceHydrator.Revision = revision
+		if app.Status.SourceHydrator.Revision != revision || (app.Status.SourceHydrator.HydrateOperation != nil && app.Status.SourceHydrator.HydrateOperation.Status != appv1.HydrateOperationPhaseSucceeded) {
+			restart := false
+			if app.Status.SourceHydrator.Revision != revision {
+				restart = true
+			}
+
+			if app.Status.SourceHydrator.HydrateOperation.Status == appv1.HydrateOperationPhaseFailed {
+				retryWaitPeriod := 2 * 60 * time.Second
+				if metav1.Now().Sub(app.Status.SourceHydrator.HydrateOperation.FinishedAt.Time) > retryWaitPeriod {
+					logCtx.Info("Retrying failed hydration")
+					restart = true
+				}
+			}
+
+			if restart {
 				app.Status.SourceHydrator.HydrateOperation = &appv1.HydrateOperation{
 					StartedAt:  metav1.Now(),
 					FinishedAt: nil,
@@ -1600,6 +1610,7 @@ func (ctrl *ApplicationController) processAppRefreshQueueItem() (processNext boo
 				ctrl.persistAppStatus(origApp, &app.Status)
 				origApp.Status.SourceHydrator = app.Status.SourceHydrator
 			}
+
 			destinationBranch := app.Spec.SourceHydrator.SyncSource.TargetRevision
 			if app.Spec.SourceHydrator.HydrateTo != nil {
 				destinationBranch = app.Spec.SourceHydrator.HydrateTo.TargetRevision
@@ -1611,8 +1622,7 @@ func (ctrl *ApplicationController) processAppRefreshQueueItem() (processNext boo
 			}
 			ctrl.hydrationQueue.Add(key)
 		} else {
-			//TODO: swtich to debug
-			logCtx.Info("No reason to re-hydrate")
+			logCtx.Debug("No reason to re-hydrate")
 		}
 	}
 
@@ -1793,7 +1803,7 @@ func (ctrl *ApplicationController) processHydrationQueueItem() (processNext bool
 				app.Status.SourceHydrator.HydrateOperation.Status = appv1.HydrateOperationPhaseFailed
 				failedAt := metav1.Now()
 				app.Status.SourceHydrator.HydrateOperation.FinishedAt = &failedAt
-				app.Status.SourceHydrator.HydrateOperation.Message = err.Error()
+				app.Status.SourceHydrator.HydrateOperation.Message = fmt.Sprintf("Failed to hydrated revision %s: %v", revision, err.Error())
 				ctrl.persistAppStatus(origApp, &app.Status)
 				logCtx.Errorf("Failed to hydrate app: %v", err)
 				return
@@ -1808,6 +1818,7 @@ func (ctrl *ApplicationController) processHydrationQueueItem() (processNext bool
 				Status:     appv1.HydrateOperationPhaseSucceeded,
 				Message:    "",
 			}
+			app.Status.SourceHydrator.Revision = revision
 			app.Status.SourceHydrator.HydrateOperation = operation
 			ctrl.persistAppStatus(origApp, &app.Status)
 			origApp.Status.SourceHydrator = app.Status.SourceHydrator
