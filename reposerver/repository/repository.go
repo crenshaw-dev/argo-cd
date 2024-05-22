@@ -1000,7 +1000,9 @@ func getHelmRepos(appPath string, repositories []*v1alpha1.Repository, helmRepoC
 				// finally if repo is OCI and no credentials found, use the first OCI credential matching by hostname
 				// see https://github.com/argoproj/argo-cd/issues/14636
 				for _, cred := range repositories {
-					if depURL, err := url.Parse("oci://" + dep.Repo); err == nil && cred.EnableOCI && depURL.Host == cred.Repo {
+					// if the repo is OCI, don't match the repository URL exactly, but only as a dependent repository prefix just like in the getRepoCredential function
+					// see https://github.com/argoproj/argo-cd/issues/12436
+					if _, err := url.Parse("oci://" + dep.Repo); err == nil && cred.EnableOCI && strings.HasPrefix(dep.Repo, cred.Repo) {
 						repo.Username = cred.Username
 						repo.Password = cred.Password
 						break
@@ -2549,7 +2551,7 @@ func (s *Service) ResolveRevision(ctx context.Context, q *apiclient.ResolveRevis
 	app := q.App
 	ambiguousRevision := q.AmbiguousRevision
 	var revision string
-	var source = app.Spec.GetSource()
+	var source = app.Spec.GetSourcePtrByIndex(int(q.SourceIndex))
 	if source.IsHelm() {
 		_, revision, err := s.newHelmClientResolveRevision(repo, ambiguousRevision, source.Chart, true)
 

@@ -289,7 +289,7 @@ func (s *service) Commit(r ManifestsRequest) (ManifestsResponse, error) {
 
 	// Clear the repo contents using git rm
 	logCtx.Debug("Clearing repo contents")
-	rmCmd := exec.Command("git", "clean", "-fdx")
+	rmCmd := exec.Command("git", "rm", "-r", "--ignore-unmatch", ".")
 	rmCmd.Dir = dirPath
 	out, err = rmCmd.CombinedOutput()
 	if err != nil {
