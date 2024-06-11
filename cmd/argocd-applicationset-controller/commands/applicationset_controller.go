@@ -66,6 +66,7 @@ func NewCommand() *cobra.Command {
 		globalPreservedAnnotations   []string
 		globalPreservedLabels        []string
 		enableScmProviders           bool
+		acceptProtobufContentType    bool
 	)
 	scheme := runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(scheme)
@@ -95,6 +96,9 @@ func NewCommand() *cobra.Command {
 			errors.CheckError(err)
 
 			restConfig.UserAgent = fmt.Sprintf("argocd-applicationset-controller/%s (%s)", vers.Version, vers.Platform)
+			if acceptProtobufContentType {
+				restConfig.AcceptContentTypes = runtime.ContentTypeProtobuf + "," + runtime.ContentTypeJSON
+			}
 
 			policyObj, exists := utils.Policies[policy]
 			if !exists {
@@ -113,7 +117,7 @@ func NewCommand() *cobra.Command {
 				os.Exit(1)
 			}
 
-			mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+			mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 				Scheme:                 scheme,
 				MetricsBindAddress:     metricsAddr,
 				Namespace:              watchedNamespace,
@@ -260,6 +264,8 @@ func NewCommand() *cobra.Command {
 	command.Flags().StringVar(&scmRootCAPath, "scm-root-ca-path", env.StringFromEnv("ARGOCD_APPLICATIONSET_CONTROLLER_SCM_ROOT_CA_PATH", ""), "Provide Root CA Path for self-signed TLS Certificates")
 	command.Flags().StringSliceVar(&globalPreservedAnnotations, "preserved-annotations", env.StringsFromEnv("ARGOCD_APPLICATIONSET_CONTROLLER_GLOBAL_PRESERVED_ANNOTATIONS", []string{}, ","), "Sets global preserved field values for annotations")
 	command.Flags().StringSliceVar(&globalPreservedLabels, "preserved-labels", env.StringsFromEnv("ARGOCD_APPLICATIONSET_CONTROLLER_GLOBAL_PRESERVED_LABELS", []string{}, ","), "Sets global preserved field values for labels")
+	command.Flags().BoolVar(&acceptProtobufContentType, "accept-protobuf-content-type-enabled", env.ParseBoolFromEnv("ARGOCD_ACCEPT_PROTOBUF_CONTENTTYPE_ENABLED", false), "Allows the Argo CD applicationset controller to receive kubernetes api responses in protobuf instead of json, if possible. This may improve performance in serialization but is experimental.")
+
 	return &command
 }
 

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/argoproj/pkg/stats"
 	"github.com/redis/go-redis/v9"
 	log "github.com/sirupsen/logrus"
@@ -46,38 +48,39 @@ var (
 // NewCommand returns a new instance of an argocd command
 func NewCommand() *cobra.Command {
 	var (
-		redisClient              *redis.Client
-		insecure                 bool
-		listenHost               string
-		listenPort               int
-		metricsHost              string
-		metricsPort              int
-		otlpAddress              string
-		otlpInsecure             bool
-		otlpHeaders              map[string]string
-		otlpAttrs                []string
-		glogLevel                int
-		clientConfig             clientcmd.ClientConfig
-		repoServerTimeoutSeconds int
-		baseHRef                 string
-		rootPath                 string
-		repoServerAddress        string
-		dexServerAddress         string
-		disableAuth              bool
-		contentTypes             string
-		enableGZip               bool
-		tlsConfigCustomizerSrc   func() (tls.ConfigCustomizer, error)
-		cacheSrc                 func() (*servercache.Cache, error)
-		repoServerCacheSrc       func() (*reposervercache.Cache, error)
-		frameOptions             string
-		contentSecurityPolicy    string
-		repoServerPlaintext      bool
-		repoServerStrictTLS      bool
-		dexServerPlaintext       bool
-		dexServerStrictTLS       bool
-		staticAssetsDir          string
-		applicationNamespaces    []string
-		enableProxyExtension     bool
+		redisClient               *redis.Client
+		insecure                  bool
+		listenHost                string
+		listenPort                int
+		metricsHost               string
+		metricsPort               int
+		otlpAddress               string
+		otlpInsecure              bool
+		otlpHeaders               map[string]string
+		otlpAttrs                 []string
+		glogLevel                 int
+		clientConfig              clientcmd.ClientConfig
+		repoServerTimeoutSeconds  int
+		baseHRef                  string
+		rootPath                  string
+		repoServerAddress         string
+		dexServerAddress          string
+		disableAuth               bool
+		contentTypes              string
+		enableGZip                bool
+		tlsConfigCustomizerSrc    func() (tls.ConfigCustomizer, error)
+		cacheSrc                  func() (*servercache.Cache, error)
+		repoServerCacheSrc        func() (*reposervercache.Cache, error)
+		frameOptions              string
+		contentSecurityPolicy     string
+		repoServerPlaintext       bool
+		repoServerStrictTLS       bool
+		dexServerPlaintext        bool
+		dexServerStrictTLS        bool
+		staticAssetsDir           string
+		applicationNamespaces     []string
+		enableProxyExtension      bool
+		acceptProtobufContentType bool
 	)
 	var command = &cobra.Command{
 		Use:               cliName,
@@ -119,6 +122,9 @@ func NewCommand() *cobra.Command {
 			errors.CheckError(err)
 			errors.CheckError(v1alpha1.SetK8SConfigDefaults(appclientsetConfig))
 			config.UserAgent = fmt.Sprintf("argocd-server/%s (%s)", vers.Version, vers.Platform)
+			if acceptProtobufContentType {
+				config.AcceptContentTypes = runtime.ContentTypeProtobuf + "," + runtime.ContentTypeJSON
+			}
 
 			if failureRetryCount > 0 {
 				appclientsetConfig = kube.AddFailureRetryWrapper(appclientsetConfig, failureRetryCount, failureRetryPeriodMilliSeconds)
@@ -268,6 +274,8 @@ func NewCommand() *cobra.Command {
 	command.Flags().BoolVar(&dexServerStrictTLS, "dex-server-strict-tls", env.ParseBoolFromEnv("ARGOCD_SERVER_DEX_SERVER_STRICT_TLS", false), "Perform strict validation of TLS certificates when connecting to dex server")
 	command.Flags().StringSliceVar(&applicationNamespaces, "application-namespaces", env.StringsFromEnv("ARGOCD_APPLICATION_NAMESPACES", []string{}, ","), "List of additional namespaces where application resources can be managed in")
 	command.Flags().BoolVar(&enableProxyExtension, "enable-proxy-extension", env.ParseBoolFromEnv("ARGOCD_SERVER_ENABLE_PROXY_EXTENSION", false), "Enable Proxy Extension feature")
+	command.Flags().BoolVar(&acceptProtobufContentType, "accept-protobuf-content-type-enabled", env.ParseBoolFromEnv("ARGOCD_ACCEPT_PROTOBUF_CONTENTTYPE_ENABLED", false), "Allows the Argo CD to receive kubernetes api responses in protobuf instead of json, if possible. This may improve performance in serialization but is experimental.")
+
 	tlsConfigCustomizerSrc = tls.AddTLSFlagsToCmd(command)
 	cacheSrc = servercache.AddCacheFlagsToCmd(command, cacheutil.Options{
 		OnClientCreated: func(client *redis.Client) {
