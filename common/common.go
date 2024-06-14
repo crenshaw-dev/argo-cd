@@ -21,6 +21,8 @@ const (
 const (
 	// DefaultRepoServerAddr is the gRPC address of the Argo CD repo server
 	DefaultRepoServerAddr = "argocd-repo-server:8081"
+	// DefaultCommitServerAddr is the gRPC address of the Argo CD commit server
+	DefaultCommitServerAddr = "argocd-commit-server:8086"
 	// DefaultDexServerAddr is the HTTP address of the Dex OIDC server, which we run a reverse proxy against
 	DefaultDexServerAddr = "argocd-dex-server:5556"
 	// DefaultRedisAddr is the default redis address
@@ -56,15 +58,19 @@ const (
 	DefaultPortArgoCDMetrics          = 8082
 	DefaultPortArgoCDAPIServerMetrics = 8083
 	DefaultPortRepoServerMetrics      = 8084
+	DefaultPortCommitServer           = 8086
+	DefaultPortCommitServerMetrics    = 8087
 )
 
 // DefaultAddressAPIServer for ArgoCD components
 const (
-	DefaultAddressAdminDashboard    = "localhost"
-	DefaultAddressAPIServer         = "0.0.0.0"
-	DefaultAddressAPIServerMetrics  = "0.0.0.0"
-	DefaultAddressRepoServer        = "0.0.0.0"
-	DefaultAddressRepoServerMetrics = "0.0.0.0"
+	DefaultAddressAdminDashboard      = "localhost"
+	DefaultAddressAPIServer           = "0.0.0.0"
+	DefaultAddressAPIServerMetrics    = "0.0.0.0"
+	DefaultAddressRepoServer          = "0.0.0.0"
+	DefaultAddressRepoServerMetrics   = "0.0.0.0"
+	DefaultAddressCommitServer        = "0.0.0.0"
+	DefaultAddressCommitServerMetrics = "0.0.0.0"
 )
 
 // Default paths on the pod's file system
@@ -113,11 +119,17 @@ const (
 
 	// LegacyShardingAlgorithm is the default value for Sharding Algorithm it uses an `uid` based distribution (non-uniform)
 	LegacyShardingAlgorithm = "legacy"
-	// RoundRobinShardingAlgorithm is a flag value that can be opted for Sharding Algorithm it uses an equal distribution accross all shards
+	// RoundRobinShardingAlgorithm is a flag value that can be opted for Sharding Algorithm it uses an equal distribution across all shards
 	RoundRobinShardingAlgorithm = "round-robin"
 	// AppControllerHeartbeatUpdateRetryCount is the retry count for updating the Shard Mapping to the Shard Mapping ConfigMap used by Application Controller
 	AppControllerHeartbeatUpdateRetryCount = 3
-	DefaultShardingAlgorithm               = LegacyShardingAlgorithm
+
+	// ConsistentHashingWithBoundedLoadsAlgorithm uses an algorithm that tries to use an equal distribution across
+	// all shards but is optimised to handle sharding and/or cluster addition or removal. In case of sharding or
+	// cluster changes, this algorithm minimises the changes between shard and clusters assignments.
+	ConsistentHashingWithBoundedLoadsAlgorithm = "consistent-hashing"
+
+	DefaultShardingAlgorithm = LegacyShardingAlgorithm
 )
 
 // Dex related constants
@@ -163,8 +175,8 @@ const (
 	LabelValueSecretTypeRepository = "repository"
 	// LabelValueSecretTypeRepoCreds indicates a secret type of repository credentials
 	LabelValueSecretTypeRepoCreds = "repo-creds"
-	// LabelValueSecretTypeRepoCreds indicates a secret type of repository credentials
-	LabelValueSecretTypeHydrator = "hydrator"
+	// LabelValueSecretTypeRepositoryWrite indicates a secret type of repository credentials for writing
+	LabelValueSecretTypeRepositoryWrite = "repository-write"
 
 	// AnnotationKeyAppInstance is the Argo CD application name is used as the instance name
 	AnnotationKeyAppInstance = "argocd.argoproj.io/tracking-id"
@@ -208,7 +220,7 @@ const (
 	EnvVarTLSDataPath = "ARGOCD_TLS_DATA_PATH"
 	// EnvGitAttemptsCount specifies number of git remote operations attempts count
 	EnvGitAttemptsCount = "ARGOCD_GIT_ATTEMPTS_COUNT"
-	// EnvGitRetryMaxDuration specifices max duration of git remote operation retry
+	// EnvGitRetryMaxDuration specifies max duration of git remote operation retry
 	EnvGitRetryMaxDuration = "ARGOCD_GIT_RETRY_MAX_DURATION"
 	// EnvGitRetryDuration specifies duration of git remote operation retry
 	EnvGitRetryDuration = "ARGOCD_GIT_RETRY_DURATION"
@@ -234,7 +246,7 @@ const (
 	EnvControllerShard = "ARGOCD_CONTROLLER_SHARD"
 	// EnvControllerShardingAlgorithm is the distribution sharding algorithm to be used: legacy or round-robin
 	EnvControllerShardingAlgorithm = "ARGOCD_CONTROLLER_SHARDING_ALGORITHM"
-	//EnvEnableDynamicClusterDistribution enables dynamic sharding (ALPHA)
+	// EnvEnableDynamicClusterDistribution enables dynamic sharding (ALPHA)
 	EnvEnableDynamicClusterDistribution = "ARGOCD_ENABLE_DYNAMIC_CLUSTER_DISTRIBUTION"
 	// EnvEnableGRPCTimeHistogramEnv enables gRPC metrics collection
 	EnvEnableGRPCTimeHistogramEnv = "ARGOCD_ENABLE_GRPC_TIME_HISTOGRAM"
@@ -355,7 +367,7 @@ func GetCMPChunkSize() int {
 }
 
 // GetCMPWorkDir will return the full path of the work directory used by the CMP server.
-// This directory and all it's contents will be deleted durring CMP bootstrap.
+// This directory and all it's contents will be deleted during CMP bootstrap.
 func GetCMPWorkDir() string {
 	if workDir := os.Getenv(EnvCMPWorkDir); workDir != "" {
 		return filepath.Join(workDir, DefaultCMPWorkDirName)

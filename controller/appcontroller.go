@@ -16,8 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/argoproj/argo-cd/v2/controller/commit"
-
 	clustercache "github.com/argoproj/gitops-engine/pkg/cache"
 	"github.com/argoproj/gitops-engine/pkg/diff"
 	"github.com/argoproj/gitops-engine/pkg/health"
@@ -43,6 +41,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+
+	commitclient "github.com/argoproj/argo-cd/v2/commitserver/apiclient"
 
 	"github.com/argoproj/argo-cd/v2/common"
 	statecache "github.com/argoproj/argo-cd/v2/controller/cache"
@@ -133,6 +133,7 @@ type ApplicationController struct {
 	statusRefreshJitter           time.Duration
 	selfHealTimeout               time.Duration
 	repoClientset                 apiclient.Clientset
+	commitClientset               commitclient.Clientset
 	db                            db.ArgoDB
 	settingsMgr                   *settings_util.SettingsManager
 	refreshRequestedApps          map[string]CompareWith
@@ -156,6 +157,7 @@ func NewApplicationController(
 	kubeClientset kubernetes.Interface,
 	applicationClientset appclientset.Interface,
 	repoClientset apiclient.Clientset,
+	commitClientset commitclient.Clientset,
 	argoCache *appstatecache.Cache,
 	kubectl kube.Kubectl,
 	appResyncPeriod time.Duration,
@@ -188,6 +190,7 @@ func NewApplicationController(
 		kubectl:                           kubectl,
 		applicationClientset:              applicationClientset,
 		repoClientset:                     repoClientset,
+		commitClientset:                   commitClientset,
 		appRefreshQueue:                   workqueue.NewNamedRateLimitingQueue(ratelimiter.NewCustomAppControllerRateLimiter(rateLimiterConfig), "app_reconciliation_queue"),
 		appOperationQueue:                 workqueue.NewNamedRateLimitingQueue(ratelimiter.NewCustomAppControllerRateLimiter(rateLimiterConfig), "app_operation_processing_queue"),
 		projectRefreshQueue:               workqueue.NewNamedRateLimitingQueue(ratelimiter.NewCustomAppControllerRateLimiter(rateLimiterConfig), "project_reconciliation_queue"),
@@ -223,7 +226,6 @@ func NewApplicationController(
 				if projMeta, ok := obj.(metav1.Object); ok {
 					ctrl.InvalidateProjectsCache(projMeta.GetName())
 				}
-
 			}
 		},
 		UpdateFunc: func(old, new interface{}) {
@@ -265,7 +267,7 @@ func NewApplicationController(
 				if kubeerrors.IsNotFound(err) {
 					appControllerDeployment = nil
 				} else {
-					return fmt.Errorf("error retrieving Application Controller Deployment: %s", err)
+					return fmt.Errorf("error retrieving Application Controller Deployment: %w", err)
 				}
 			}
 			if appControllerDeployment != nil {
@@ -274,7 +276,7 @@ func NewApplicationController(
 				}
 				shard := env.ParseNumFromEnv(common.EnvControllerShard, -1, -math.MaxInt32, math.MaxInt32)
 				if _, err := sharding.GetOrUpdateShardFromConfigMap(kubeClientset.(*kubernetes.Clientset), settingsMgr, int(*appControllerDeployment.Spec.Replicas), shard); err != nil {
-					return fmt.Errorf("error while updating the heartbeat for to the Shard Mapping ConfigMap: %s", err)
+					return fmt.Errorf("error while updating the heartbeat for to the Shard Mapping ConfigMap: %w", err)
 				}
 			}
 		}
@@ -386,7 +388,7 @@ func (ctrl *ApplicationController) getAppProj(app *appv1.Application) (*appv1.Ap
 		if apierr.IsNotFound(err) {
 			return nil, err
 		} else {
-			return nil, fmt.Errorf("could not retrieve AppProject '%s' from cache: %v", app.Spec.Project, err)
+			return nil, fmt.Errorf("could not retrieve AppProject '%s' from cache: %w", app.Spec.Project, err)
 		}
 	}
 	if !proj.IsAppNamespacePermitted(app, ctrl.namespace) {
@@ -462,19 +464,19 @@ func (ctrl *ApplicationController) handleObjectUpdated(managedByApp map[string]b
 func (ctrl *ApplicationController) setAppManagedResources(a *appv1.Application, comparisonResult *comparisonResult) (*appv1.ApplicationTree, error) {
 	managedResources, err := ctrl.hideSecretData(a, comparisonResult)
 	if err != nil {
-		return nil, fmt.Errorf("error getting managed resources: %s", err)
+		return nil, fmt.Errorf("error getting managed resources: %w", err)
 	}
 	tree, err := ctrl.getResourceTree(a, managedResources)
 	if err != nil {
-		return nil, fmt.Errorf("error getting resource tree: %s", err)
+		return nil, fmt.Errorf("error getting resource tree: %w", err)
 	}
 	err = ctrl.cache.SetAppResourcesTree(a.InstanceName(ctrl.namespace), tree)
 	if err != nil {
-		return nil, fmt.Errorf("error setting app resource tree: %s", err)
+		return nil, fmt.Errorf("error setting app resource tree: %w", err)
 	}
 	err = ctrl.cache.SetAppManagedResources(a.InstanceName(ctrl.namespace), managedResources)
 	if err != nil {
-		return nil, fmt.Errorf("error setting app managed resources: %s", err)
+		return nil, fmt.Errorf("error setting app managed resources: %w", err)
 	}
 	return tree, nil
 }
@@ -522,14 +524,14 @@ func (ctrl *ApplicationController) getResourceTree(a *appv1.Application, managed
 	for i := range managedResources {
 		managedResource := managedResources[i]
 		delete(orphanedNodesMap, kube.NewResourceKey(managedResource.Group, managedResource.Kind, managedResource.Namespace, managedResource.Name))
-		var live = &unstructured.Unstructured{}
+		live := &unstructured.Unstructured{}
 		err := json.Unmarshal([]byte(managedResource.LiveState), &live)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal live state of managed resources: %w", err)
 		}
 
 		if live == nil {
-			var target = &unstructured.Unstructured{}
+			target := &unstructured.Unstructured{}
 			err = json.Unmarshal([]byte(managedResource.TargetState), &target)
 			if err != nil {
 				return nil, fmt.Errorf("failed to unmarshal target state of managed resources: %w", err)
@@ -721,28 +723,28 @@ func (ctrl *ApplicationController) hideSecretData(app *appv1.Application, compar
 			var err error
 			target, live, err = diff.HideSecretData(res.Target, res.Live)
 			if err != nil {
-				return nil, fmt.Errorf("error hiding secret data: %s", err)
+				return nil, fmt.Errorf("error hiding secret data: %w", err)
 			}
 			compareOptions, err := ctrl.settingsMgr.GetResourceCompareOptions()
 			if err != nil {
-				return nil, fmt.Errorf("error getting resource compare options: %s", err)
+				return nil, fmt.Errorf("error getting resource compare options: %w", err)
 			}
 			resourceOverrides, err := ctrl.settingsMgr.GetResourceOverrides()
 			if err != nil {
-				return nil, fmt.Errorf("error getting resource overrides: %s", err)
+				return nil, fmt.Errorf("error getting resource overrides: %w", err)
 			}
 			appLabelKey, err := ctrl.settingsMgr.GetAppInstanceLabelKey()
 			if err != nil {
-				return nil, fmt.Errorf("error getting app instance label key: %s", err)
+				return nil, fmt.Errorf("error getting app instance label key: %w", err)
 			}
 			trackingMethod, err := ctrl.settingsMgr.GetTrackingMethod()
 			if err != nil {
-				return nil, fmt.Errorf("error getting tracking method: %s", err)
+				return nil, fmt.Errorf("error getting tracking method: %w", err)
 			}
 
 			clusterCache, err := ctrl.stateCache.GetClusterCache(app.Spec.Destination.Server)
 			if err != nil {
-				return nil, fmt.Errorf("error getting cluster cache: %s", err)
+				return nil, fmt.Errorf("error getting cluster cache: %w", err)
 			}
 			diffConfig, err := argodiff.NewDiffConfigBuilder().
 				WithDiffSettings(app.Spec.IgnoreDifferences, resourceOverrides, compareOptions.IgnoreAggregatedRoles, ctrl.ignoreNormalizerOpts).
@@ -752,12 +754,12 @@ func (ctrl *ApplicationController) hideSecretData(app *appv1.Application, compar
 				WithGVKParser(clusterCache.GetGVKParser()).
 				Build()
 			if err != nil {
-				return nil, fmt.Errorf("appcontroller error building diff config: %s", err)
+				return nil, fmt.Errorf("appcontroller error building diff config: %w", err)
 			}
 
 			diffResult, err := argodiff.StateDiff(live, target, diffConfig)
 			if err != nil {
-				return nil, fmt.Errorf("error applying diff: %s", err)
+				return nil, fmt.Errorf("error applying diff: %w", err)
 			}
 			resDiff = diffResult
 		}
@@ -765,7 +767,7 @@ func (ctrl *ApplicationController) hideSecretData(app *appv1.Application, compar
 		if live != nil {
 			data, err := json.Marshal(live)
 			if err != nil {
-				return nil, fmt.Errorf("error marshaling live json: %s", err)
+				return nil, fmt.Errorf("error marshaling live json: %w", err)
 			}
 			item.LiveState = string(data)
 		} else {
@@ -775,7 +777,7 @@ func (ctrl *ApplicationController) hideSecretData(app *appv1.Application, compar
 		if target != nil {
 			data, err := json.Marshal(target)
 			if err != nil {
-				return nil, fmt.Errorf("error marshaling target json: %s", err)
+				return nil, fmt.Errorf("error marshaling target json: %w", err)
 			}
 			item.TargetState = string(data)
 		} else {
@@ -861,6 +863,14 @@ func (ctrl *ApplicationController) Run(ctx context.Context, statusProcessors int
 		for ctrl.processHydrationQueueItem() {
 		}
 	}, time.Second, ctx.Done())
+
+	//go NewPreviewer(
+	//	&ctrl.appLister,
+	//	&ctrl.appStateManager,
+	//	ctrl.settingsMgr,
+	//	ctrl.getAppProj,
+	//	ctrl.db,
+	//).Run()
 
 	<-ctx.Done()
 }
@@ -1068,7 +1078,6 @@ func (ctrl *ApplicationController) getPermittedAppLiveObjects(app *appv1.Applica
 	// Don't delete live resources which are not permitted in the app project
 	for k, v := range objsMap {
 		permitted, err := proj.IsLiveResourcePermitted(v, app.Spec.Destination.Server, app.Spec.Destination.Name, projectClusters)
-
 		if err != nil {
 			return nil, err
 		}
@@ -1369,7 +1378,6 @@ func (ctrl *ApplicationController) processRequestedAppOperation(app *appv1.Appli
 		} else if state.RetryCount > 0 {
 			state.Message = fmt.Sprintf("%s (retried %d times).", state.Message, state.RetryCount)
 		}
-
 	}
 
 	ctrl.setOperationState(app, state)
@@ -1593,7 +1601,7 @@ func (ctrl *ApplicationController) processAppRefreshQueueItem() (processNext boo
 				restart = true
 			}
 
-			if app.Status.SourceHydrator.HydrateOperation != nil && app.Status.SourceHydrator.HydrateOperation.Status == appv1.HydrateOperationPhaseFailed {
+			if app.Status.SourceHydrator.HydrateOperation != nil && app.Status.SourceHydrator.HydrateOperation.FinishedAt != nil && app.Status.SourceHydrator.HydrateOperation.Status == appv1.HydrateOperationPhaseFailed {
 				retryWaitPeriod := 2 * 60 * time.Second
 				if metav1.Now().Sub(app.Status.SourceHydrator.HydrateOperation.FinishedAt.Time) > retryWaitPeriod {
 					logCtx.Info("Retrying failed hydration")
@@ -1611,9 +1619,9 @@ func (ctrl *ApplicationController) processAppRefreshQueueItem() (processNext boo
 				origApp.Status.SourceHydrator = app.Status.SourceHydrator
 			}
 
-			destinationBranch := app.Spec.SourceHydrator.SyncSource.TargetRevision
+			destinationBranch := app.Spec.SourceHydrator.SyncSource.TargetBranch
 			if app.Spec.SourceHydrator.HydrateTo != nil {
-				destinationBranch = app.Spec.SourceHydrator.HydrateTo.TargetRevision
+				destinationBranch = app.Spec.SourceHydrator.HydrateTo.TargetBranch
 			}
 			key := hydrationQueueKey{
 				sourceRepoURL:        app.Spec.SourceHydrator.DrySource.RepoURL,
@@ -1661,7 +1669,7 @@ func (ctrl *ApplicationController) processAppRefreshQueueItem() (processNext boo
 
 	compareResult, err := ctrl.appStateManager.CompareAppState(app, project, revisions, sources,
 		refreshType == appv1.RefreshTypeHard,
-		comparisonLevel == CompareWithLatestForceResolve, localManifests, hasMultipleSources)
+		comparisonLevel == CompareWithLatestForceResolve, localManifests, hasMultipleSources, false)
 
 	if goerrors.Is(err, CompareStateRepoError) {
 		logCtx.Warnf("Ignoring temporary failed attempt to compare app state against repo: %v", err)
@@ -1776,17 +1784,17 @@ func (ctrl *ApplicationController) processHydrationQueueItem() (processNext bool
 			app.Spec.SourceHydrator.DrySource.TargetRevision != hydrationKey.sourceTargetRevision {
 			continue
 		}
-		destinationBranch := app.Spec.SourceHydrator.SyncSource.TargetRevision
+		destinationBranch := app.Spec.SourceHydrator.SyncSource.TargetBranch
 		if app.Spec.SourceHydrator.HydrateTo != nil {
-			destinationBranch = app.Spec.SourceHydrator.HydrateTo.TargetRevision
+			destinationBranch = app.Spec.SourceHydrator.HydrateTo.TargetBranch
 		}
 		if destinationBranch != hydrationKey.destinationBranch {
 			continue
 		}
-		if _, ok := relevantApps[app.Spec.SourceHydrator.SyncSource.TargetRevision]; !ok {
-			relevantApps[app.Spec.SourceHydrator.SyncSource.TargetRevision] = []*appv1.Application{}
+		if _, ok := relevantApps[app.Spec.SourceHydrator.SyncSource.TargetBranch]; !ok {
+			relevantApps[app.Spec.SourceHydrator.SyncSource.TargetBranch] = []*appv1.Application{}
 		}
-		relevantApps[app.Spec.SourceHydrator.SyncSource.TargetRevision] = append(relevantApps[app.Spec.SourceHydrator.SyncSource.TargetRevision], app)
+		relevantApps[app.Spec.SourceHydrator.SyncSource.TargetBranch] = append(relevantApps[app.Spec.SourceHydrator.SyncSource.TargetBranch], app)
 	}
 
 	// Get the latest revision
@@ -1832,10 +1840,10 @@ func (ctrl *ApplicationController) hydrate(apps []*appv1.Application, refreshTyp
 		return nil
 	}
 	repoURL := apps[0].Spec.SourceHydrator.DrySource.RepoURL
-	syncBranch := apps[0].Spec.SourceHydrator.SyncSource.TargetRevision
+	syncBranch := apps[0].Spec.SourceHydrator.SyncSource.TargetBranch
 	targetBranch := apps[0].Spec.GetHydrateToSource().TargetRevision
 
-	var paths []commit.PathDetails
+	var paths []*commitclient.PathDetails
 	for _, app := range apps {
 		project, err := ctrl.getAppProj(app)
 		if err != nil {
@@ -1855,36 +1863,50 @@ func (ctrl *ApplicationController) hydrate(apps []*appv1.Application, refreshTyp
 		}
 
 		// TODO: enable signature verification
-		objs, resp, err := ctrl.appStateManager.GetRepoObjs(app, drySources, appLabelKey, revisions, refreshType == appv1.RefreshTypeHard, comparisonLevel == CompareWithLatestForceResolve, false, project, false)
+		objs, resp, err := ctrl.appStateManager.GetRepoObjs(app, drySources, appLabelKey, revisions, refreshType == appv1.RefreshTypeHard, comparisonLevel == CompareWithLatestForceResolve, false, project, false, false)
 		if err != nil {
 			return fmt.Errorf("failed to get repo objects: %w", err)
 		}
 
 		// Set up a ManifestsRequest
-		manifestDetails := make([]commit.ManifestDetails, len(objs))
+		manifestDetails := make([]*commitclient.ManifestDetails, len(objs))
 		for i, obj := range objs {
-			manifestDetails[i] = commit.ManifestDetails{Manifest: *obj}
+			objJson, err := json.Marshal(obj)
+			if err != nil {
+				return fmt.Errorf("failed to marshal object: %w", err)
+			}
+			manifestDetails[i] = &commitclient.ManifestDetails{Manifest: string(objJson)}
 		}
 
-		paths = append(paths, commit.PathDetails{
+		paths = append(paths, &commitclient.PathDetails{
 			Path:      app.Spec.SourceHydrator.SyncSource.Path,
 			Manifests: manifestDetails,
 			Commands:  resp[0].Commands,
 		})
 	}
 
-	manifestsRequest := commit.ManifestsRequest{
-		RepoURL:       repoURL,
+	repo, err := ctrl.db.GetHydratorCredentials(context.Background(), repoURL)
+	if err != nil {
+		return fmt.Errorf("failed to get hydrator credentials: %w", err)
+	}
+
+	manifestsRequest := commitclient.ManifestsRequest{
+		Repo:          repo,
+		RepoUrl:       repoURL,
 		SyncBranch:    syncBranch,
 		TargetBranch:  targetBranch,
-		DrySHA:        revision,
+		DrySha:        revision,
 		CommitMessage: fmt.Sprintf("[Argo CD Bot] hydrate %s", revision),
-		CommitTime:    time.Now(),
+		CommitTime:    time.Now().String(),
 		Paths:         paths,
 	}
 
-	commitService := commit.NewService(ctrl.db)
-	_, err := commitService.Commit(manifestsRequest)
+	closer, commitService, err := ctrl.commitClientset.NewCommitServerClient()
+	if err != nil {
+		return fmt.Errorf("failed to create commit service: %w", err)
+	}
+	defer closer.Close()
+	_, err = commitService.Commit(context.Background(), &manifestsRequest)
 	if err != nil {
 		return fmt.Errorf("failed to commit hydrated manifests: %w", err)
 	}
@@ -2129,7 +2151,6 @@ func (ctrl *ApplicationController) autoSync(app *appv1.Application, syncStatus *
 			ctrl.requestAppRefresh(app.QualifiedName(), CompareWithLatest.Pointer(), &retryAfter)
 			return nil, 0
 		}
-
 	}
 
 	if app.Spec.SyncPolicy.Automated.Prune && !app.Spec.SyncPolicy.Automated.AllowEmpty {

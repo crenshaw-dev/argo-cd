@@ -860,8 +860,23 @@ func schema_pkg_apis_application_v1alpha1_ApplicationSetApplicationStatus(ref co
 							Format:      "",
 						},
 					},
+					"targetRevisions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TargetRevision tracks the desired revisions the Application should be synced to.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 				},
-				Required: []string{"application", "message", "status", "step"},
+				Required: []string{"application", "message", "status", "step", "targetRevisions"},
 			},
 		},
 		Dependencies: []string{
@@ -873,7 +888,7 @@ func schema_pkg_apis_application_v1alpha1_ApplicationSetCondition(ref common.Ref
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "ApplicationSetCondition contains details about an applicationset condition, which is usally an error or warning",
+				Description: "ApplicationSetCondition contains details about an applicationset condition, which is usually an error or warning",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"type": {
@@ -3876,7 +3891,6 @@ func schema_pkg_apis_application_v1alpha1_HydrateOperation(ref common.ReferenceC
 					"startedAt": {
 						SchemaProps: spec.SchemaProps{
 							Description: "StartedAt indicates when the hydrate operation started",
-							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
@@ -3918,7 +3932,7 @@ func schema_pkg_apis_application_v1alpha1_HydrateTo(ref common.ReferenceCallback
 				Description: "HydrateTo specifies a location to which hydrated manifests should be pushed as a \"staging area\" before being moved to the SyncSource. The RepoURL and Path are assumed based on the associated SyncSource config in the SourceHydrator.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"targetRevision": {
+					"targetBranch": {
 						SchemaProps: spec.SchemaProps{
 							Default: "",
 							Type:    []string{"string"},
@@ -3926,7 +3940,7 @@ func schema_pkg_apis_application_v1alpha1_HydrateTo(ref common.ReferenceCallback
 						},
 					},
 				},
-				Required: []string{"targetRevision"},
+				Required: []string{"targetBranch"},
 			},
 		},
 	}
@@ -4229,7 +4243,6 @@ func schema_pkg_apis_application_v1alpha1_KustomizeReplica(ref common.ReferenceC
 					"count": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Number of replicas",
-							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
 						},
 					},
@@ -4351,8 +4364,7 @@ func schema_pkg_apis_application_v1alpha1_ListGenerator(ref common.ReferenceCall
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1.JSON"),
+										Ref: ref("k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1.JSON"),
 									},
 								},
 							},
@@ -4690,7 +4702,6 @@ func schema_pkg_apis_application_v1alpha1_OperationState(ref common.ReferenceCal
 					"startedAt": {
 						SchemaProps: spec.SchemaProps{
 							Description: "StartedAt contains time of operation start",
-							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
@@ -4989,8 +5000,7 @@ func schema_pkg_apis_application_v1alpha1_PluginInput(ref common.ReferenceCallba
 								Allows: true,
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1.JSON"),
+										Ref: ref("k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1.JSON"),
 									},
 								},
 							},
@@ -5573,7 +5583,7 @@ func schema_pkg_apis_application_v1alpha1_RepoCreds(ref common.ReferenceCallback
 				Properties: map[string]spec.Schema{
 					"url": {
 						SchemaProps: spec.SchemaProps{
-							Description: "URL is the URL that this credentials matches to",
+							Description: "URL is the URL to which these credentials match",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -5862,7 +5872,7 @@ func schema_pkg_apis_application_v1alpha1_Repository(ref common.ReferenceCallbac
 					},
 					"project": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Reference between project and repository that allow you automatically to be added as item inside SourceRepos project entity",
+							Description: "Reference between project and repository that allows it to be automatically added as an item inside SourceRepos project entity",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -6849,7 +6859,6 @@ func schema_pkg_apis_application_v1alpha1_RevisionHistory(ref common.ReferenceCa
 					"deployedAt": {
 						SchemaProps: spec.SchemaProps{
 							Description: "DeployedAt holds the time the sync operation completed",
-							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
@@ -6936,7 +6945,6 @@ func schema_pkg_apis_application_v1alpha1_RevisionMetadata(ref common.ReferenceC
 					"date": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Date specifies when the revision was authored",
-							Default:     map[string]interface{}{},
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
@@ -7958,7 +7966,7 @@ func schema_pkg_apis_application_v1alpha1_SyncSource(ref common.ReferenceCallbac
 				Description: "SyncSource specifies a location from which hydrated manifests may be synced. RepoURL is assumed based on the associated DrySource config in the SourceHydrator.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"targetRevision": {
+					"targetBranch": {
 						SchemaProps: spec.SchemaProps{
 							Default: "",
 							Type:    []string{"string"},
@@ -7973,7 +7981,7 @@ func schema_pkg_apis_application_v1alpha1_SyncSource(ref common.ReferenceCallbac
 						},
 					},
 				},
-				Required: []string{"targetRevision", "path"},
+				Required: []string{"targetBranch", "path"},
 			},
 		},
 	}
