@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"k8s.io/apimachinery/pkg/runtime"
 	"math"
 	"net"
 	"net/url"
@@ -470,6 +471,8 @@ func (c *liveStateCache) getCluster(server string) (clustercache.ClusterCache, e
 	if log.GetLevel() < log.DebugLevel {
 		clusterCacheConfig.WarningHandler = rest.NoWarnings{}
 	}
+
+	clusterCacheConfig.ContentType = runtime.ContentTypeProtobuf + "," + runtime.ContentTypeJSON
 
 	clusterCacheOpts := []clustercache.UpdateSettingsFunc{
 		clustercache.SetListSemaphore(semaphore.NewWeighted(clusterCacheListSemaphoreSize)),
