@@ -2,6 +2,7 @@ package git
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -15,6 +16,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/Masterminds/semver/v3"
 
 	argoexec "github.com/argoproj/pkg/exec"
 	"github.com/bmatcuk/doublestar/v4"
@@ -66,7 +69,7 @@ type Client interface {
 	Init() error
 	Fetch(revision string) error
 	Submodule() error
-	Checkout(revision string, submoduleEnabled bool) error
+	Checkout(revision string, submoduleEnabled bool) (string, error)
 	LsRefs() (*Refs, error)
 	LsRemote(revision string) (string, error)
 	LsFiles(path string, enableNewGitFileGlobbing bool) ([]string, error)
@@ -76,6 +79,20 @@ type Client interface {
 	VerifyCommitSignature(string) (string, error)
 	IsAnnotatedTag(string) bool
 	ChangedFiles(revision string, targetRevision string) ([]string, error)
+	IsRevisionPresent(revision string) bool
+	// Config runs a git config command.
+	Config(args ...string) (string, error)
+	// SetAuthor sets the author name and email in the git configuration.
+	SetAuthor(name, email string) (string, error)
+	// CheckoutOrOrphan checks out the sync branch. If the branch does not exist, it creates an orphan branch.
+	CheckoutOrOrphan(branch string, submoduleEnabled bool) (string, error)
+	// CheckoutOrNew checks out the target branch. If the branch does not exist, it creates an empty branch based
+	// on the sync branch.
+	CheckoutOrNew(branch, base string, submoduleEnabled bool) (string, error)
+	// RemoveContents removes all files from the git repository.
+	RemoveContents() (string, error)
+	// CommitAndPush commits and pushes changes to the target branch.
+	CommitAndPush(branch, message string) (string, error)
 }
 
 type EventHandlers struct {
@@ -129,7 +146,6 @@ func init() {
 	maxRetryDuration = env.ParseDurationFromEnv(common.EnvGitRetryMaxDuration, common.DefaultGitRetryMaxDuration, 0, math.MaxInt64)
 	retryDuration = env.ParseDurationFromEnv(common.EnvGitRetryDuration, common.DefaultGitRetryDuration, 0, math.MaxInt64)
 	factor = env.ParseInt64FromEnv(common.EnvGitRetryFactor, common.DefaultGitRetryFactor, 0, math.MaxInt64)
-
 }
 
 type ClientOpts func(c *nativeGitClient)
@@ -177,9 +193,7 @@ func NewClientExt(rawRepoURL string, root string, creds Creds, insecure bool, en
 	return client, nil
 }
 
-var (
-	gitClientTimeout = env.ParseDurationFromEnv("ARGOCD_GIT_REQUEST_TIMEOUT", 15*time.Second, 0, math.MaxInt64)
-)
+var gitClientTimeout = env.ParseDurationFromEnv("ARGOCD_GIT_REQUEST_TIMEOUT", 15*time.Second, 0, math.MaxInt64)
 
 // Returns a HTTP client object suitable for go-git to use using the following
 // pattern:
@@ -191,7 +205,7 @@ var (
 //   - Otherwise (and on non-fatal errors), a default HTTP client is returned.
 func GetRepoHTTPClient(repoURL string, insecure bool, creds Creds, proxyURL string) *http.Client {
 	// Default HTTP client
-	var customHTTPClient = &http.Client{
+	customHTTPClient := &http.Client{
 		// 15 second timeout by default
 		Timeout: gitClientTimeout,
 		// don't follow redirect
@@ -317,15 +331,15 @@ func (m *nativeGitClient) Init() error {
 	if err == nil {
 		return nil
 	}
-	if err != git.ErrRepositoryNotExists {
+	if !errors.Is(err, git.ErrRepositoryNotExists) {
 		return err
 	}
 	log.Infof("Initializing %s to %s", m.repoURL, m.root)
 	err = os.RemoveAll(m.root)
 	if err != nil {
-		return fmt.Errorf("unable to clean repo at %s: %v", m.root, err)
+		return fmt.Errorf("unable to clean repo at %s: %w", m.root, err)
 	}
-	err = os.MkdirAll(m.root, 0755)
+	err = os.MkdirAll(m.root, 0o755)
 	if err != nil {
 		return err
 	}
@@ -353,6 +367,21 @@ func (m *nativeGitClient) fetch(revision string) error {
 		err = m.runCredentialedCmd("fetch", "origin", "--tags", "--force", "--prune")
 	}
 	return err
+}
+
+// IsRevisionPresent checks to see if the given revision already exists locally.
+func (m *nativeGitClient) IsRevisionPresent(revision string) bool {
+	if revision == "" {
+		return false
+	}
+
+	cmd := exec.Command("git", "cat-file", "-t", revision)
+	out, err := m.runCmdOutput(cmd, runOpts{SkipErrorLogging: true})
+	if out == "commit" && err == nil {
+		return true
+	} else {
+		return false
+	}
 }
 
 // Fetch fetches latest updates from origin
@@ -440,43 +469,43 @@ func (m *nativeGitClient) Submodule() error {
 	return nil
 }
 
-// Checkout checkout specified revision
-func (m *nativeGitClient) Checkout(revision string, submoduleEnabled bool) error {
+// Checkout checks out the specified revision
+func (m *nativeGitClient) Checkout(revision string, submoduleEnabled bool) (string, error) {
 	if revision == "" || revision == "HEAD" {
 		revision = "origin/HEAD"
 	}
-	if _, err := m.runCmd("checkout", "--force", revision); err != nil {
-		return err
+	if out, err := m.runCmd("checkout", "--force", revision); err != nil {
+		return out, fmt.Errorf("failed to checkout %s: %w", revision, err)
 	}
 	// We must populate LFS content by using lfs checkout, if we have at least
 	// one LFS reference in the current revision.
 	if m.IsLFSEnabled() {
 		if largeFiles, err := m.LsLargeFiles(); err == nil {
 			if len(largeFiles) > 0 {
-				if _, err := m.runCmd("lfs", "checkout"); err != nil {
-					return err
+				if out, err := m.runCmd("lfs", "checkout"); err != nil {
+					return out, fmt.Errorf("failed to checkout LFS files: %w", err)
 				}
 			}
 		} else {
-			return err
+			return "", fmt.Errorf("failed to list LFS files: %w", err)
 		}
 	}
 	if _, err := os.Stat(m.root + "/.gitmodules"); !os.IsNotExist(err) {
 		if submoduleEnabled {
 			if err := m.Submodule(); err != nil {
-				return err
+				return "", fmt.Errorf("failed to update submodules: %w", err)
 			}
 		}
 	}
 	// NOTE
 	// The double “f” in the arguments is not a typo: the first “f” tells
 	// `git clean` to delete untracked files and directories, and the second “f”
-	// tells it to clean untractked nested Git repositories (for example a
+	// tells it to clean untracked nested Git repositories (for example a
 	// submodule which has since been removed).
-	if _, err := m.runCmd("clean", "-ffdx"); err != nil {
-		return err
+	if out, err := m.runCmd("clean", "-ffdx"); err != nil {
+		return out, fmt.Errorf("failed to clean: %w", err)
 	}
-	return nil
+	return "", nil
 }
 
 func (m *nativeGitClient) getRefs() ([]*plumbing.Reference, error) {
@@ -547,7 +576,6 @@ func (m *nativeGitClient) getRefs() ([]*plumbing.Reference, error) {
 
 func (m *nativeGitClient) LsRefs() (*Refs, error) {
 	refs, err := m.getRefs()
-
 	if err != nil {
 		return nil, err
 	}
@@ -574,11 +602,11 @@ func (m *nativeGitClient) LsRefs() (*Refs, error) {
 	return sortedRefs, nil
 }
 
-// LsRemote resolves the commit SHA of a specific branch, tag, or HEAD. If the supplied revision
-// does not resolve, and "looks" like a 7+ hexadecimal commit SHA, it return the revision string.
-// Otherwise, it returns an error indicating that the revision could not be resolved. This method
-// runs with in-memory storage and is safe to run concurrently, or to be run without a git
-// repository locally cloned.
+// LsRemote resolves the commit SHA of a specific branch, tag (with semantic versioning or not),
+// or HEAD. If the supplied revision does not resolve, and "looks" like a 7+ hexadecimal commit SHA,
+// it will return the revision string. Otherwise, it returns an error indicating that the revision could
+// not be resolved. This method runs with in-memory storage and is safe to run concurrently,
+// or to be run without a git repository locally cloned.
 func (m *nativeGitClient) LsRemote(revision string) (res string, err error) {
 	for attempt := 0; attempt < maxAttemptsCount; attempt++ {
 		res, err = m.lsRemote(revision)
@@ -605,26 +633,38 @@ func (m *nativeGitClient) lsRemote(revision string) (string, error) {
 	}
 
 	refs, err := m.getRefs()
-
 	if err != nil {
 		return "", err
 	}
+
 	if revision == "" {
 		revision = "HEAD"
 	}
+
+	semverSha, err := m.resolveSemverRevision(revision, refs)
+	if err != nil {
+		return "", err
+	}
+
+	if semverSha != "" {
+		return semverSha, nil
+	}
+
 	// refToHash keeps a maps of remote refs to their hash
 	// (e.g. refs/heads/master -> a67038ae2e9cb9b9b16423702f98b41e36601001)
 	refToHash := make(map[string]string)
+
 	// refToResolve remembers ref name of the supplied revision if we determine the revision is a
 	// symbolic reference (like HEAD), in which case we will resolve it from the refToHash map
 	refToResolve := ""
+
 	for _, ref := range refs {
 		refName := ref.Name().String()
 		hash := ref.Hash().String()
 		if ref.Type() == plumbing.HashReference {
 			refToHash[refName] = hash
 		}
-		//log.Debugf("%s\t%s", hash, refName)
+		// log.Debugf("%s\t%s", hash, refName)
 		if ref.Name().Short() == revision || refName == revision {
 			if ref.Type() == plumbing.HashReference {
 				log.Debugf("revision '%s' resolved to '%s'", revision, hash)
@@ -635,6 +675,7 @@ func (m *nativeGitClient) lsRemote(revision string) (string, error) {
 			}
 		}
 	}
+
 	if refToResolve != "" {
 		// If refToResolve is non-empty, we are resolving symbolic reference (e.g. HEAD).
 		// It should exist in our refToHash map
@@ -643,14 +684,63 @@ func (m *nativeGitClient) lsRemote(revision string) (string, error) {
 			return hash, nil
 		}
 	}
+
 	// We support the ability to use a truncated commit-SHA (e.g. first 7 characters of a SHA)
 	if IsTruncatedCommitSHA(revision) {
 		log.Debugf("revision '%s' assumed to be commit sha", revision)
 		return revision, nil
 	}
+
 	// If we get here, revision string had non hexadecimal characters (indicating its a branch, tag,
 	// or symbolic ref) and we were unable to resolve it to a commit SHA.
 	return "", fmt.Errorf("Unable to resolve '%s' to a commit SHA", revision)
+}
+
+// resolveSemverRevision is a part of the lsRemote method workflow.
+// When the user configure correctly the Git repository revision and the revision is a valid semver constraint
+// only the for loop in this function will run, otherwise the lsRemote loop will try to resolve the revision.
+// Some examples to illustrate the actual behavior, if:
+// * The revision is "v0.1.*"/"0.1.*" or "v0.1.2"/"0.1.2" and there's a tag matching that constraint only this function loop will run;
+// * The revision is "v0.1.*"/"0.1.*" or "0.1.2"/"0.1.2" and there is no tag matching that constraint this function loop and lsRemote loop will run for backward compatibility;
+// * The revision is "custom-tag" only the lsRemote loop will run because that revision is an invalid semver;
+// * The revision is "master-branch" only the lsRemote loop will run because that revision is an invalid semver;
+func (m *nativeGitClient) resolveSemverRevision(revision string, refs []*plumbing.Reference) (string, error) {
+	constraint, err := semver.NewConstraint(revision)
+	if err != nil {
+		return "", nil
+	}
+
+	maxVersion := semver.New(0, 0, 0, "", "")
+	maxVersionHash := plumbing.ZeroHash
+	for _, ref := range refs {
+		if !ref.Name().IsTag() {
+			continue
+		}
+
+		tag := ref.Name().Short()
+		version, err := semver.NewVersion(tag)
+		if err != nil {
+			if errors.Is(err, semver.ErrInvalidSemVer) {
+				log.Debugf("Invalid semantic version: %s", tag)
+				continue
+			}
+
+			return "", fmt.Errorf("error parsing version for tag: %w", err)
+		}
+
+		if constraint.Check(version) {
+			if version.GreaterThan(maxVersion) {
+				maxVersion = version
+				maxVersionHash = ref.Hash()
+			}
+		}
+	}
+
+	if maxVersionHash.IsZero() {
+		return "", nil
+	}
+
+	return maxVersionHash.String(), nil
 }
 
 // CommitSHA returns current commit sha from `git rev-parse HEAD`
@@ -689,7 +779,8 @@ func (m *nativeGitClient) RevisionMetadata(revision string) (*RevisionMetadata, 
 func (m *nativeGitClient) VerifyCommitSignature(revision string) (string, error) {
 	out, err := m.runGnuPGWrapper("git-verify-wrapper.sh", revision)
 	if err != nil {
-		return "", err
+		log.Errorf("error verifying commit signature: %v", err)
+		return "", fmt.Errorf("permission denied")
 	}
 	return out, nil
 }
@@ -726,6 +817,118 @@ func (m *nativeGitClient) ChangedFiles(revision string, targetRevision string) (
 
 	files := strings.Split(out, "\n")
 	return files, nil
+}
+
+// Config runs a git config command.
+func (m *nativeGitClient) Config(args ...string) (string, error) {
+	args = append([]string{"config"}, args...)
+	out, err := m.runCmd(args...)
+	if err != nil {
+		return out, fmt.Errorf("failed to run git config: %w", err)
+	}
+	return out, nil
+}
+
+// SetAuthor sets the author name and email in the git configuration.
+func (m *nativeGitClient) SetAuthor(name, email string) (string, error) {
+	if name != "" {
+		out, err := m.Config("--local", "user.name", name)
+		if err != nil {
+			return out, err
+		}
+	}
+	if email != "" {
+		out, err := m.Config("--local", "user.email", email)
+		if err != nil {
+			return out, err
+		}
+	}
+	return "", nil
+}
+
+// CheckoutOrOrphan checks out the branch. If the branch does not exist, it creates an orphan branch.
+func (m *nativeGitClient) CheckoutOrOrphan(branch string, submoduleEnabled bool) (string, error) {
+	out, err := m.Checkout(branch, submoduleEnabled)
+	if err != nil {
+		// If the branch doesn't exist, create it as an orphan branch.
+		if strings.Contains(err.Error(), "did not match any file(s) known to git") {
+			out, err = m.runCmd("switch", "--orphan", branch)
+			if err != nil {
+				return out, fmt.Errorf("failed to create orphan branch: %w", err)
+			}
+		} else {
+			return out, fmt.Errorf("failed to checkout branch: %w", err)
+		}
+
+		// Make an empty initial commit.
+		out, err = m.runCmd("commit", "--allow-empty", "-m", "Initial commit")
+		if err != nil {
+			return out, fmt.Errorf("failed to commit initial commit: %w", err)
+		}
+
+		// Push the commit.
+		err = m.runCredentialedCmd("push", "origin", branch)
+		if err != nil {
+			return "", fmt.Errorf("failed to push to branch: %w", err)
+		}
+	}
+	return "", nil
+}
+
+// CheckoutOrNew checks out the given branch. If the branch does not exist, it creates an empty branch based on
+// the base branch.
+func (m *nativeGitClient) CheckoutOrNew(branch, base string, submoduleEnabled bool) (string, error) {
+	out, err := m.Checkout(branch, submoduleEnabled)
+	if err != nil {
+		if strings.Contains(err.Error(), "did not match any file(s) known to git") {
+			// If the branch does not exist, create any empty branch based on the sync branch
+			// First, checkout the sync branch.
+			out, err = m.Checkout(base, submoduleEnabled)
+			if err != nil {
+				return out, fmt.Errorf("failed to checkout sync branch: %w", err)
+			}
+
+			out, err = m.runCmd("checkout", "-b", branch)
+			if err != nil {
+				return out, fmt.Errorf("failed to create branch: %w", err)
+			}
+		} else {
+			return out, fmt.Errorf("failed to checkout branch: %w", err)
+		}
+	}
+	return "", nil
+}
+
+// RemoveContents removes all files from the git repository.
+func (m *nativeGitClient) RemoveContents() (string, error) {
+	out, err := m.runCmd("rm", "-r", "--ignore-unmatch", ".")
+	if err != nil {
+		return out, fmt.Errorf("failed to clear repo contents: %w", err)
+	}
+	return "", nil
+}
+
+// CommitAndPush commits and pushes changes to the target branch.
+func (m *nativeGitClient) CommitAndPush(branch, message string) (string, error) {
+	out, err := m.runCmd("add", ".")
+	if err != nil {
+		return out, fmt.Errorf("failed to add files: %w", err)
+	}
+
+	out, err = m.runCmd("commit", "-m", message)
+	if err != nil {
+		if strings.Contains(out, "nothing to commit, working tree clean") {
+			return out, nil
+		}
+		return out, fmt.Errorf("failed to commit: %w", err)
+	}
+
+	err = m.runCredentialedCmd("push", "origin", branch)
+	if err != nil {
+		return "", fmt.Errorf("failed to push: %w", err)
+	}
+
+	return "", nil
 }
 
 // runWrapper runs a custom command with all the semantics of running the Git client
@@ -767,7 +970,7 @@ func (m *nativeGitClient) runCredentialedCmd(args ...string) error {
 func (m *nativeGitClient) runCmdOutput(cmd *exec.Cmd, ropts runOpts) (string, error) {
 	cmd.Dir = m.root
 	cmd.Env = append(os.Environ(), cmd.Env...)
-	// Set $HOME to nowhere, so we can be execute Git regardless of any external
+	// Set $HOME to nowhere, so we can execute Git regardless of any external
 	// authentication keys (e.g. in ~/.ssh) -- this is especially important for
 	// running tests on local machines and/or CircleCI.
 	cmd.Env = append(cmd.Env, "HOME=/dev/null")

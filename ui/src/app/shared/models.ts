@@ -103,6 +103,7 @@ export interface ChartDetails {
 export interface SyncOperationResult {
     resources: ResourceResult[];
     revision: string;
+    revisions: string[];
 }
 
 export type ResultCode = 'Synced' | 'SyncFailed' | 'Pruned' | 'PruneSkipped';
@@ -215,7 +216,7 @@ export interface DrySource {
 
 export interface SyncSource {
     targetRevision: string;
-    path: string
+    path: string;
 }
 
 export interface HydrateTo {
@@ -474,7 +475,7 @@ export type HydrateOperationPhase = 'Running' | 'Failed' | 'Succeeded';
 export const HydrateOperationPhases = {
     Running: 'Running' as OperationPhase,
     Failed: 'Failed' as OperationPhase,
-    Succeeded: 'Succeeded' as OperationPhase,
+    Succeeded: 'Succeeded' as OperationPhase
 };
 
 export interface JwtTokens {

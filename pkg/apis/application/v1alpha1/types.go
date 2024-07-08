@@ -51,6 +51,7 @@ import (
 // +kubebuilder:printcolumn:name="Sync Status",type=string,JSONPath=`.status.sync.status`
 // +kubebuilder:printcolumn:name="Health Status",type=string,JSONPath=`.status.health.status`
 // +kubebuilder:printcolumn:name="Revision",type=string,JSONPath=`.status.sync.revision`,priority=10
+// +kubebuilder:printcolumn:name="Project",type=string,JSONPath=`.spec.project`,priority=10
 type Application struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
@@ -208,6 +209,11 @@ func (s ApplicationSources) Equals(other ApplicationSources) bool {
 	return true
 }
 
+// IsZero returns true if the application source is considered empty
+func (a ApplicationSources) IsZero() bool {
+	return len(a) == 0
+}
+
 func (a *ApplicationSpec) GetSource() ApplicationSource {
 	// if Application has multiple sources, return the first source in sources
 	if a.HasMultipleSources() {
@@ -225,9 +231,9 @@ func (a *ApplicationSpec) GetSource() ApplicationSource {
 // GetHydrateToSource returns the hydrateTo source if it exists, otherwise returns the sync source.
 func (a *ApplicationSpec) GetHydrateToSource() ApplicationSource {
 	if a.SourceHydrator != nil {
-		var targetRevision = a.SourceHydrator.SyncSource.TargetRevision
+		targetRevision := a.SourceHydrator.SyncSource.TargetBranch
 		if a.SourceHydrator.HydrateTo != nil {
-			targetRevision = a.SourceHydrator.HydrateTo.TargetRevision
+			targetRevision = a.SourceHydrator.HydrateTo.TargetBranch
 		}
 		return ApplicationSource{
 			RepoURL:        a.SourceHydrator.DrySource.RepoURL,
@@ -285,6 +291,11 @@ func (a *ApplicationSource) AllowsConcurrentProcessing() bool {
 	return true
 }
 
+// IsRef returns true when the application source is of type Ref
+func (a *ApplicationSource) IsRef() bool {
+	return a.Ref != ""
+}
+
 // IsHelm returns true when the application source is of type Helm
 func (a *ApplicationSource) IsHelm() bool {
 	return a.Chart != ""
@@ -338,7 +349,7 @@ func (s SourceHydrator) GetApplicationSource() ApplicationSource {
 		// Pull the RepoURL from the dry source. The SyncSource's RepoURL is assumed to be the same.
 		RepoURL:        s.DrySource.RepoURL,
 		Path:           s.SyncSource.Path,
-		TargetRevision: s.SyncSource.TargetRevision,
+		TargetRevision: s.SyncSource.TargetBranch,
 	}
 }
 
@@ -352,14 +363,14 @@ type DrySource struct {
 // SyncSource specifies a location from which hydrated manifests may be synced. RepoURL is assumed based on the
 // associated DrySource config in the SourceHydrator.
 type SyncSource struct {
-	TargetRevision string `json:"targetRevision" protobuf:"bytes,1,name=targetRevision"`
-	Path           string `json:"path" protobuf:"bytes,2,name=path"`
+	TargetBranch string `json:"targetBranch" protobuf:"bytes,1,name=targetBranch"`
+	Path         string `json:"path" protobuf:"bytes,2,name=path"`
 }
 
 // HydrateTo specifies a location to which hydrated manifests should be pushed as a "staging area" before being moved to
 // the SyncSource. The RepoURL and Path are assumed based on the associated SyncSource config in the SourceHydrator.
 type HydrateTo struct {
-	TargetRevision string `json:"targetRevision" protobuf:"bytes,1,name=targetRevision"`
+	TargetBranch string `json:"targetBranch" protobuf:"bytes,1,name=targetBranch"`
 }
 
 // RefreshType specifies how to refresh the sources of a given application
@@ -554,7 +565,7 @@ type ApplicationSourceKustomize struct {
 	Patches KustomizePatches `json:"patches,omitempty" protobuf:"bytes,12,opt,name=patches"`
 	// Components specifies a list of kustomize components to add to the kustomization before building
 	Components []string `json:"components,omitempty" protobuf:"bytes,13,rep,name=components"`
-	//LabelWithoutSelector specifies whether to apply common labels to resource selectors or not
+	// LabelWithoutSelector specifies whether to apply common labels to resource selectors or not
 	LabelWithoutSelector bool `json:"labelWithoutSelector,omitempty" protobuf:"bytes,14,opt,name=labelWithoutSelector"`
 }
 
@@ -1062,6 +1073,8 @@ type HydrateOperation struct {
 	Status HydrateOperationPhase `json:"status" protobuf:"bytes,3,opt,name=status"`
 	// Message contains a message describing the current status of the hydrate operation
 	Message string `json:"message" protobuf:"bytes,4,opt,name=message"`
+	// Revision holds the resolved revision (sha) of the dry source as of the most recent reconciliation
+	Revision string `json:"revision,omitempty" protobuf:"bytes,5,opt,name=revision"`
 }
 
 type HydrateOperationPhase string
@@ -1334,7 +1347,6 @@ func (r *RetryStrategy) NextRetryAt(lastAttempt time.Time, retryCounts int64) (t
 		if r.Backoff.Factor != nil {
 			factor = *r.Backoff.Factor
 		}
-
 	}
 	// Formula: timeToWait = duration * factor^retry_number
 	// Note that timeToWait should equal to duration for the first retry attempt.
@@ -1867,10 +1879,10 @@ type Cluster struct {
 	Name string `json:"name" protobuf:"bytes,2,opt,name=name"`
 	// Config holds cluster information for connecting to a cluster
 	Config ClusterConfig `json:"config" protobuf:"bytes,3,opt,name=config"`
-	// DEPRECATED: use Info.ConnectionState field instead.
+	// Deprecated: use Info.ConnectionState field instead.
 	// ConnectionState contains information about cluster connection state
 	ConnectionState ConnectionState `json:"connectionState,omitempty" protobuf:"bytes,4,opt,name=connectionState"`
-	// DEPRECATED: use Info.ServerVersion field instead.
+	// Deprecated: use Info.ServerVersion field instead.
 	// The server version
 	ServerVersion string `json:"serverVersion,omitempty" protobuf:"bytes,5,opt,name=serverVersion"`
 	// Holds list of namespaces which are accessible in that cluster. Cluster level resources will be ignored if namespace list is not empty.
@@ -2362,7 +2374,6 @@ func (s *SyncWindows) Active() *SyncWindows {
 }
 
 func (s *SyncWindows) active(currentTime time.Time) *SyncWindows {
-
 	// If SyncWindows.Active() is called outside of a UTC locale, it should be
 	// first converted to UTC before we scan through the SyncWindows.
 	currentTime = currentTime.In(time.UTC)
@@ -2396,7 +2407,6 @@ func (s *SyncWindows) InactiveAllows() *SyncWindows {
 }
 
 func (s *SyncWindows) inactiveAllows(currentTime time.Time) *SyncWindows {
-
 	// If SyncWindows.InactiveAllows() is called outside of a UTC locale, it should be
 	// first converted to UTC before we scan through the SyncWindows.
 	currentTime = currentTime.In(time.UTC)
@@ -2438,7 +2448,6 @@ func (w *SyncWindow) scheduleOffsetByTimeZone() time.Duration {
 func (s *AppProjectSpec) AddWindow(knd string, sch string, dur string, app []string, ns []string, cl []string, ms bool, timeZone string) error {
 	if len(knd) == 0 || len(sch) == 0 || len(dur) == 0 {
 		return fmt.Errorf("cannot create window: require kind, schedule, duration and one or more of applications, namespaces and clusters")
-
 	}
 
 	window := &SyncWindow{
@@ -2467,7 +2476,6 @@ func (s *AppProjectSpec) AddWindow(knd string, sch string, dur string, app []str
 	s.SyncWindows = append(s.SyncWindows, window)
 
 	return nil
-
 }
 
 // DeleteWindow deletes a sync window with the given id from the AppProject
@@ -2573,10 +2581,8 @@ func (w *SyncWindows) hasDeny() (bool, bool) {
 		if a.Kind == "deny" {
 			if !denyFound {
 				manualEnabled = a.ManualSync
-			} else {
-				if manualEnabled {
-					manualEnabled = a.ManualSync
-				}
+			} else if manualEnabled {
+				manualEnabled = a.ManualSync
 			}
 			denyFound = true
 		}
@@ -2618,7 +2624,6 @@ func (w SyncWindow) Active() bool {
 }
 
 func (w SyncWindow) active(currentTime time.Time) bool {
-
 	// If SyncWindow.Active() is called outside of a UTC locale, it should be
 	// first converted to UTC before search
 	currentTime = currentTime.UTC()
@@ -2636,7 +2641,6 @@ func (w SyncWindow) active(currentTime time.Time) bool {
 
 // Update updates a sync window's settings with the given parameter
 func (w *SyncWindow) Update(s string, d string, a []string, n []string, c []string, tz string) error {
-
 	if len(s) == 0 && len(d) == 0 && len(a) == 0 && len(n) == 0 && len(c) == 0 {
 		return fmt.Errorf("cannot update: require one or more of schedule, duration, application, namespace, or cluster")
 	}
@@ -2667,7 +2671,6 @@ func (w *SyncWindow) Update(s string, d string, a []string, n []string, c []stri
 
 // Validate checks whether a sync window has valid configuration. The error returned indicates any problems that has been found.
 func (w *SyncWindow) Validate() error {
-
 	// Default timeZone to UTC if timeZone is not specified
 	if w.TimeZone == "" {
 		w.TimeZone = "UTC"
@@ -2683,11 +2686,11 @@ func (w *SyncWindow) Validate() error {
 	specParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 	_, err := specParser.Parse(w.Schedule)
 	if err != nil {
-		return fmt.Errorf("cannot parse schedule '%s': %s", w.Schedule, err)
+		return fmt.Errorf("cannot parse schedule '%s': %w", w.Schedule, err)
 	}
 	_, err = time.ParseDuration(w.Duration)
 	if err != nil {
-		return fmt.Errorf("cannot parse duration '%s': %s", w.Duration, err)
+		return fmt.Errorf("cannot parse duration '%s': %w", w.Duration, err)
 	}
 	return nil
 }
@@ -3202,7 +3205,6 @@ func (r ResourceDiff) TargetObject() (*unstructured.Unstructured, error) {
 
 // SetInferredServer sets the Server field of the destination. See IsServerInferred() for details.
 func (d *ApplicationDestination) SetInferredServer(server string) {
-
 	d.isServerInferred = true
 	d.Server = server
 }
