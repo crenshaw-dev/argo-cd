@@ -290,7 +290,11 @@ func (c *Cache) GetItem(key string, item interface{}) error {
 		return fmt.Errorf("cannot get item into a nil for key %s", key)
 	}
 	client := c.GetClient()
-	return client.Get(key, item)
+	err := client.Get(key, item)
+	if err != nil {
+		return fmt.Errorf("failed to get item from cache: %w", err)
+	}
+	return nil
 }
 
 func (c *Cache) OnUpdated(ctx context.Context, key string, callback func() error) error {

@@ -58,7 +58,10 @@ func appManagedResourcesKey(appName string) string {
 
 func (c *Cache) GetAppManagedResources(appName string, res *[]*appv1.ResourceDiff) error {
 	err := c.GetItem(appManagedResourcesKey(appName), &res)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to get managed resources item from cache: %w", err)
+	}
+	return nil
 }
 
 func (c *Cache) SetAppManagedResources(appName string, managedResources []*appv1.ResourceDiff) error {

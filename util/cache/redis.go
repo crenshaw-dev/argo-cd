@@ -131,9 +131,13 @@ func (r *redisCache) Get(key string, obj interface{}) error {
 		err = ErrCacheMiss
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get cached data from Redis: %w", err)
 	}
-	return r.unmarshal(data, obj)
+	err = r.unmarshal(data, obj)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal cached data: %w", err)
+	}
+	return nil
 }
 
 func (r *redisCache) Delete(key string) error {

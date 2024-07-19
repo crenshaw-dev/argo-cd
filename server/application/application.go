@@ -1307,9 +1307,16 @@ func (s *Server) getCachedAppState(ctx context.Context, a *appv1.Application, ge
 		if err != nil {
 			return fmt.Errorf("error getting application by query: %w", err)
 		}
-		return getFromCache()
+		err = getFromCache()
+		if err != nil {
+			return fmt.Errorf("error getting app from cache after refresh: %w", err)
+		}
+		return nil
 	}
-	return err
+	if err != nil {
+		return fmt.Errorf("error getting app from cache for some reason besides cache miss: %w", err)
+	}
+	return nil
 }
 
 func (s *Server) getAppResources(ctx context.Context, a *appv1.Application) (*appv1.ApplicationTree, error) {
@@ -1549,7 +1556,11 @@ func (s *Server) ManagedResources(ctx context.Context, q *application.ResourcesQ
 
 	items := make([]*appv1.ResourceDiff, 0)
 	err = s.getCachedAppState(ctx, a, func() error {
-		return s.cache.GetAppManagedResources(a.InstanceName(s.ns), &items)
+		err := s.cache.GetAppManagedResources(a.InstanceName(s.ns), &items)
+		if err != nil {
+			return fmt.Errorf("error getting cached managed resources: %w", err)
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error getting cached app managed resources: %w", err)
