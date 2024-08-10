@@ -10,7 +10,7 @@ import (
 )
 
 type ClusterShardingCache interface {
-	Init(clusters *v1alpha1.ClusterList, apps *v1alpha1.ApplicationList)
+	Init(clusters *v1alpha1.ClusterList, apps []*v1alpha1.Application)
 	Add(c *v1alpha1.Cluster)
 	Delete(clusterServer string)
 	Update(oldCluster *v1alpha1.Cluster, newCluster *v1alpha1.Cluster)
@@ -69,7 +69,7 @@ func (s *ClusterSharding) IsManagedCluster(c *v1alpha1.Cluster) bool {
 	return clusterShard == s.Shard
 }
 
-func (sharding *ClusterSharding) Init(clusters *v1alpha1.ClusterList, apps *v1alpha1.ApplicationList) {
+func (sharding *ClusterSharding) Init(clusters *v1alpha1.ClusterList, apps []*v1alpha1.Application) {
 	sharding.lock.Lock()
 	defer sharding.lock.Unlock()
 	newClusters := make(map[string]*v1alpha1.Cluster, len(clusters.Items))
@@ -79,10 +79,10 @@ func (sharding *ClusterSharding) Init(clusters *v1alpha1.ClusterList, apps *v1al
 	}
 	sharding.Clusters = newClusters
 
-	newApps := make(map[string]*v1alpha1.Application, len(apps.Items))
-	for i := range apps.Items {
-		app := apps.Items[i]
-		newApps[app.Name] = &app
+	newApps := make(map[string]*v1alpha1.Application, len(apps))
+	for i := range apps {
+		app := apps[i]
+		newApps[app.Name] = app
 	}
 	sharding.Apps = newApps
 	sharding.updateDistribution()

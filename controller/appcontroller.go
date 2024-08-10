@@ -850,12 +850,12 @@ func (ctrl *ApplicationController) Run(ctx context.Context, statusProcessors int
 	if err != nil {
 		log.Warnf("Cannot init sharding. Error while querying clusters list from database: %v", err)
 	} else {
-		appItems, err := ctrl.getAppList(metav1.ListOptions{})
+		apps, err := ctrl.appLister.List(labels.Everything())
 
 		if err != nil {
 			log.Warnf("Cannot init sharding. Error while querying application list from database: %v", err)
 		} else {
-			ctrl.clusterSharding.Init(clusters, appItems)
+			ctrl.clusterSharding.Init(clusters, apps)
 		}
 	}
 
@@ -2365,28 +2365,6 @@ func (ctrl *ApplicationController) toAppKey(appName string) string {
 
 func (ctrl *ApplicationController) toAppQualifiedName(appName, appNamespace string) string {
 	return fmt.Sprintf("%s/%s", appNamespace, appName)
-}
-
-func (ctrl *ApplicationController) getAppList(options metav1.ListOptions) (*appv1.ApplicationList, error) {
-	watchNamespace := ctrl.namespace
-	// If we have at least one additional namespace configured, we need to
-	// watch on them all.
-	if len(ctrl.applicationNamespaces) > 0 {
-		watchNamespace = ""
-	}
-
-	appList, err := ctrl.applicationClientset.ArgoprojV1alpha1().Applications(watchNamespace).List(context.TODO(), options)
-	if err != nil {
-		return nil, err
-	}
-	newItems := []appv1.Application{}
-	for _, app := range appList.Items {
-		if ctrl.isAppNamespaceAllowed(&app) {
-			newItems = append(newItems, app)
-		}
-	}
-	appList.Items = newItems
-	return appList, nil
 }
 
 func (ctrl *ApplicationController) logAppEvent(a *appv1.Application, eventInfo argo.EventInfo, message string, ctx context.Context) {
