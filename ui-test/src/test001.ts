@@ -47,6 +47,7 @@ async function doTest() {
         await UiTestUtilities.log('Test passed');
     } catch (e) {
         trace('Test failed ', e);
+        process.exit(1);
     } finally {
         await navigation.quit();
     }
