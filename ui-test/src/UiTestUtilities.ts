@@ -50,8 +50,8 @@ export default class UiTestUtilities {
     public static async init(): Promise<Navigation> {
         const options = new chrome.Options();
         if (process.env.ARGOCD_IN_CI == 'true') {
-            options.addArguments("no-sandbox");
-            options.addArguments("disable-dev-shm-usage");
+            options.addArguments("--no-sandbox");
+            options.addArguments("--disable-dev-shm-usage");
         }
         if (process.env.IS_HEADLESS == 'true') {
             options.addArguments('headless');
