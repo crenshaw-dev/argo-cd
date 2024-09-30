@@ -1,7 +1,6 @@
 import Configuration from './Configuration';
 import {Builder, By, until, WebDriver, WebElement} from 'selenium-webdriver';
 import * as chrome from 'selenium-webdriver/chrome';
-import logging from 'selenium-webdriver/lib/logging';
 import * as Const from './Constants';
 import {Navigation} from './navigation';
 
@@ -50,23 +49,22 @@ export default class UiTestUtilities {
      */
     public static async init(): Promise<Navigation> {
         const options = new chrome.Options();
-        if (process.env.IS_HEADLESS == 'true') {
-            options.addArguments('headless');
-        }
         if (process.env.ARGOCD_IN_CI == 'true') {
-            const logger = logging.getLogger('webdriver')
-            logger.setLevel(logging.Level.DEBUG);
             options.addArguments("no-sandbox");
             options.addArguments("disable-dev-shm-usage");
         }
+        if (process.env.IS_HEADLESS == 'true') {
+            options.addArguments('headless');
+        }
         options.addArguments('window-size=1400x1200');
+
+        await UiTestUtilities.log('Environment variables are:');
+        await UiTestUtilities.log(require('dotenv').config({path: __dirname + '/.env'}));
+
         const driver = await new Builder()
             .forBrowser('chrome')
             .setChromeOptions(options)
             .build();
-
-        UiTestUtilities.log('Environment variables are:');
-        UiTestUtilities.log(require('dotenv').config({path: __dirname + '.env'}));
 
         // Navigate to the ArgoCD URL
         await driver.get(Configuration.ARGOCD_SERVER);
