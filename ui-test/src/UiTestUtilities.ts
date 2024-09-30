@@ -52,6 +52,10 @@ export default class UiTestUtilities {
         if (process.env.IS_HEADLESS == 'true') {
             options.addArguments('headless');
         }
+        if (process.env.ARGOCD_IN_CI == 'true') {
+            options.addArguments("--no-sandbox");
+            options.addArguments("--disable-dev-shm-usage");
+        }
         options.addArguments('window-size=1400x1200');
         const driver = await new Builder()
             .forBrowser('chrome')

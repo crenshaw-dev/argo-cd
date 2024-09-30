@@ -517,6 +517,8 @@ jobs:
 #          name: e2e-server-k8s${{ matrix.k3s.version }}.log
 #          path: /tmp/e2e-server.log
 #        if: ${{ failure() }}
+      - uses: browser-actions/setup-chrome@latest
+      - run: chrome --version
       - name: Run UI e2e tests
         if: ${{ matrix.k3s.latest }}  # Only bother running for the latest version.
         run: |
