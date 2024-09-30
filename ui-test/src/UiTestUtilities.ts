@@ -1,6 +1,7 @@
 import Configuration from './Configuration';
 import {Builder, By, until, WebDriver, WebElement} from 'selenium-webdriver';
 import * as chrome from 'selenium-webdriver/chrome';
+import logging from 'selenium-webdriver/lib/logging';
 import * as Const from './Constants';
 import {Navigation} from './navigation';
 
@@ -53,8 +54,10 @@ export default class UiTestUtilities {
             options.addArguments('headless');
         }
         if (process.env.ARGOCD_IN_CI == 'true') {
-            options.addArguments("--no-sandbox");
-            options.addArguments("--disable-dev-shm-usage");
+            const logger = logging.getLogger('webdriver')
+            logger.setLevel(logging.Level.DEBUG);
+            options.addArguments("no-sandbox");
+            options.addArguments("disable-dev-shm-usage");
         }
         options.addArguments('window-size=1400x1200');
         const driver = await new Builder()
