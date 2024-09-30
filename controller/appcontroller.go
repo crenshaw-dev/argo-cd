@@ -2095,7 +2095,8 @@ func currentSourceEqualsSyncedSource(app *appv1.Application) bool {
 	if app.Spec.HasMultipleSources() {
 		return app.Spec.Sources.Equals(app.Status.Sync.ComparedTo.Sources)
 	}
-	return app.Spec.Source.Equals(&app.Status.Sync.ComparedTo.Source)
+	source := app.Spec.GetSource()
+	return source.Equals(&app.Status.Sync.ComparedTo.Source)
 }
 
 // needRefreshAppStatus answers if application status needs to be refreshed.
@@ -2259,6 +2260,7 @@ func (ctrl *ApplicationController) persistAppStatus(orig *appv1.Application, new
 			newAnnotations[k] = v
 		}
 		delete(newAnnotations, appv1.AnnotationKeyRefresh)
+		delete(newAnnotations, appv1.AnnotationKeyHydrate)
 	}
 	patch, modified, err := createMergePatch(
 		&appv1.Application{ObjectMeta: metav1.ObjectMeta{Annotations: orig.GetAnnotations()}, Status: orig.Status},
