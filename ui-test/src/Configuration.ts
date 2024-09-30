@@ -11,5 +11,6 @@ export default class Configuration {
     public static readonly GIT_REPO: string = process.env.GIT_REPO ? process.env.GIT_REPO : '';
     public static readonly SOURCE_REPO_PATH: string = process.env.SOURCE_REPO_PATH ? process.env.SOURCE_REPO_PATH : '';
     public static readonly DESTINATION_CLUSTER_NAME: string = process.env.DESTINATION_CLUSTER_NAME ? process.env.DESTINATION_CLUSTER_NAME : '';
+    public static readonly DESTINATION_CLUSTER_URL: string = process.env.DESTINATION_CLUSTER_URL ? process.env.DESTINATION_CLUSTER_URL : '';
     public static readonly DESTINATION_NAMESPACE: string = process.env.DESTINATION_NAMESPACE ? process.env.DESTINATION_NAMESPACE : '';
 }

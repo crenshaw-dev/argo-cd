@@ -1,6 +1,6 @@
 import Configuration from './Configuration';
 import {Builder, By, until, WebDriver, WebElement} from 'selenium-webdriver';
-import chrome from 'selenium-webdriver/chrome';
+import * as chrome from 'selenium-webdriver/chrome';
 import * as Const from './Constants';
 import {Navigation} from './navigation';
 
@@ -49,7 +49,7 @@ export default class UiTestUtilities {
      */
     public static async init(): Promise<Navigation> {
         const options = new chrome.Options();
-        if (process.env.IS_HEADLESS) {
+        if (process.env.IS_HEADLESS == 'true') {
             options.addArguments('headless');
         }
         options.addArguments('window-size=1400x1200');
@@ -131,7 +131,7 @@ export default class UiTestUtilities {
             // Execute synchronous script
             await driver.executeScript('arguments[0].click();', element);
         } catch (e) {
-            throw e;
+            throw new Error('Error clicking element: ' + e);
         }
     }
 }

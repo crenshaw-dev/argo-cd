@@ -27,7 +27,7 @@ async function doTest() {
         await applicationCreatePanel.setProjectName(Configuration.APP_PROJECT);
         await applicationCreatePanel.setSourceRepoUrl(Configuration.GIT_REPO);
         await applicationCreatePanel.setSourceRepoPath(Configuration.SOURCE_REPO_PATH);
-        await applicationCreatePanel.selectDestinationClusterNameMenu(Configuration.DESTINATION_CLUSTER_NAME);
+        await applicationCreatePanel.selectDestinationClusterURLMenu(Configuration.DESTINATION_CLUSTER_URL);
         await applicationCreatePanel.setDestinationNamespace(Configuration.DESTINATION_NAMESPACE);
         await applicationCreatePanel.clickCreateButton();
 

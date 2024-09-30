@@ -295,7 +295,7 @@ jobs:
   build-ui:
     name: Build, test & lint UI code
     # We run UI logic for backend changes so that we have a complete set of coverage documents to send to codecov.
-    if: ${{ needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' }}
+    #if: ${{ needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' }}
     runs-on: ubuntu-22.04
     needs:
       - changes
@@ -326,6 +326,15 @@ jobs:
           # If we're on the master branch, set the codecov token so that we upload bundle analysis
           CODECOV_TOKEN: ${{ github.ref == 'refs/heads/master' && secrets.CODECOV_TOKEN || '' }}
         working-directory: ui/
+      - name: Run UI e2e tests
+        run: |
+          yarn install --frozen-lockfile --ignore-optional --non-interactive
+          yarn test
+        env:
+          NODE_ENV: production
+          NODE_ONLINE_ENV: online
+          HOST_ARCH: amd64
+        working-directory: ui-test/
       - name: Run ESLint
         run: yarn lint
         working-directory: ui/
