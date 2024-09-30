@@ -52,7 +52,7 @@ jobs:
     uses: ./.github/workflows/image-reuse.yaml
     with:
       # Note: cannot use env variables to set go-version (https://docs.github.com/en/actions/using-workflows/reusing-workflows#limitations)
-      go-version: 1.23.0
+      go-version: 1.23.1
       platforms: ${{ needs.set-vars.outputs.platforms }}
       push: false
 
