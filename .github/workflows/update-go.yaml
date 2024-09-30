@@ -24,6 +24,13 @@ jobs:
     - name: Update Go
       run: |
         make update-go
+        
+        # If there are no changes, quit early.
+        if [[ -z $(git status -s) ]]; then
+          echo "No changes detected"
+          exit 0
+        fi
+        
         pr_branch="update-go-$(echo $RANDOM | md5sum | head -c 20)"
         git checkout -b "$pr_branch"
         git config --global user.email 'ci@argoproj.com'
