@@ -326,15 +326,6 @@ jobs:
           # If we're on the master branch, set the codecov token so that we upload bundle analysis
           CODECOV_TOKEN: ${{ github.ref == 'refs/heads/master' && secrets.CODECOV_TOKEN || '' }}
         working-directory: ui/
-      - name: Run UI e2e tests
-        run: |
-          yarn install --frozen-lockfile --ignore-optional --non-interactive
-          yarn test
-        env:
-          NODE_ENV: production
-          NODE_ONLINE_ENV: online
-          HOST_ARCH: amd64
-        working-directory: ui-test/
       - name: Run ESLint
         run: yarn lint
         working-directory: ui/
@@ -403,7 +394,7 @@ jobs:
         if: env.sonar_secret != ''
   test-e2e:
     name: Run end-to-end tests
-    if: ${{ needs.changes.outputs.backend == 'true' }}
+    #if: ${{ needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -526,6 +517,15 @@ jobs:
           name: e2e-server-k8s${{ matrix.k3s.version }}.log
           path: /tmp/e2e-server.log
         if: ${{ failure() }}
+      - name: Run UI e2e tests
+        run: |
+          yarn install --frozen-lockfile --ignore-optional --non-interactive
+          yarn test
+        env:
+          NODE_ENV: production
+          NODE_ONLINE_ENV: online
+          HOST_ARCH: amd64
+        working-directory: ui-test/
 
   # workaround for status checks -- check this one job instead of each individual E2E job in the matrix
   # this allows us to skip the entire matrix when it doesn't need to run while still having accurate status checks
