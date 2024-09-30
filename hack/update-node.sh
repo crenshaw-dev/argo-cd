@@ -30,3 +30,4 @@ rm Dockerfile.bak ui-test/Dockerfile.bak test/container/Dockerfile.bak
 
 # Replace node version in ci-build.yaml.
 sed -r -i.bak "s/node-version: '[0-9.]+'/node-version: '$NODE_VERSION'/" .github/workflows/ci-build.yaml
+rm .github/workflows/ci-build.yaml.bak
