@@ -69,7 +69,7 @@ export default class UiTestUtilities {
         await UiTestUtilities.log('Navigating to ArgoCD URL: ' + Configuration.ARGOCD_SERVER);
 
         // Navigate to the ArgoCD URL
-        await driver.get(Configuration.ARGOCD_SERVER);
+        await driver.get('http://' + Configuration.ARGOCD_SERVER);
 
         return new Navigation(driver);
     }
