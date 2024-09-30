@@ -59,10 +59,10 @@ export default class UiTestUtilities {
             .build();
 
         UiTestUtilities.log('Environment variables are:');
-        UiTestUtilities.log(require('dotenv').config({path: __dirname + '/../.env'}));
+        UiTestUtilities.log(require('dotenv').config({path: __dirname + '.env'}));
 
         // Navigate to the ArgoCD URL
-        await driver.get(Configuration.ARGOCD_URL);
+        await driver.get(Configuration.ARGOCD_SERVER);
 
         return new Navigation(driver);
     }
