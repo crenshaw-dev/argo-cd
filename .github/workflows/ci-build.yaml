@@ -518,6 +518,8 @@ jobs:
 #          path: /tmp/e2e-server.log
 #        if: ${{ failure() }}
       - uses: browser-actions/setup-chrome@facf10a55b9caf92e0cc749b4f82bf8220989148 # v1.7.2
+        with:
+          install-chromedriver: true
       - run: chrome --version
       - name: Run UI e2e tests
         if: ${{ matrix.k3s.latest }}  # Only bother running for the latest version.
