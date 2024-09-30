@@ -22,6 +22,8 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
     - uses: imjasonh/setup-crane@31b88efe9de28ae0ffa220711af4b60be9435f6e # v0.4
     - name: Update Go
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         make update-go
         
