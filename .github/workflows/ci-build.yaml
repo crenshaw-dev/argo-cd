@@ -522,10 +522,6 @@ jobs:
         run: |
           yarn install --frozen-lockfile --ignore-optional --non-interactive
           yarn test
-        env:
-          NODE_ENV: production
-          NODE_ONLINE_ENV: online
-          HOST_ARCH: amd64
         working-directory: ui-test/
 
   # workaround for status checks -- check this one job instead of each individual E2E job in the matrix
