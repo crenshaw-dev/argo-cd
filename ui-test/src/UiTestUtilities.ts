@@ -66,15 +66,8 @@ export default class UiTestUtilities {
             .setChromeOptions(options)
             .build();
 
-        let url = Configuration.ARGOCD_SERVER;
-        if (!url.startsWith('http')) {
-            url = 'http://' + url;
-        }
-
-        await UiTestUtilities.log('Navigating to ArgoCD URL: ' + url);
-
         // Navigate to the ArgoCD URL
-        await driver.get(url);
+        await driver.get('http://localhost:4000');
 
         return new Navigation(driver);
     }
