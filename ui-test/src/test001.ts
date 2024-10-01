@@ -20,9 +20,12 @@ async function doTest() {
     const navigation = await UiTestUtilities.init();
     try {
         const appsList: ApplicationsList = await navigation.clickApplicationsNavBarButton();
+
+        await UiTestUtilities.log('Clicked nav bar button');
+
         const applicationCreatePanel: ApplicationCreatePanel = await appsList.clickNewAppButton();
 
-        UiTestUtilities.log('About to create application');
+        await UiTestUtilities.log('About to create application');
         await applicationCreatePanel.setAppName(Configuration.APP_NAME);
         await applicationCreatePanel.setProjectName(Configuration.APP_PROJECT);
         await applicationCreatePanel.setSourceRepoUrl(Configuration.GIT_REPO);

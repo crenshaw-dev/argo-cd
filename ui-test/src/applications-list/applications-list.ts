@@ -6,7 +6,7 @@ import {ApplicationCreatePanel} from '../application-create-panel/application-cr
 import {ApplicationsSyncPanel, SYNC_PANEL_SYNCHRONIZE_BUTTON} from '../applications-sync-panel/applications-sync-panel';
 import {PopupManager} from '../popup/popup-manager';
 
-const NEW_APP_BUTTON: By = By.xpath('.//button[@qe-id="applications-list-button-new-app"]');
+const NEW_APP_BUTTON: By = By.css('button[qe-id="applications-list-button-new-app"]');
 // Uncomment to use:
 // const CREATE_APPLICATION_BUTTON: By = By.xpath('.//button[@qe-id="applications-list-button-create-application"]');
 
