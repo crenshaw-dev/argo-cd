@@ -19,6 +19,8 @@ import {PopupManager} from './popup/popup-manager';
 async function doTest() {
     const navigation = await UiTestUtilities.init();
     try {
+        await UiTestUtilities.log('About to login');
+        await navigation.login('admin', 'password');
         const appsList: ApplicationsList = await navigation.clickApplicationsNavBarButton();
 
         await UiTestUtilities.log('Clicked nav bar button');

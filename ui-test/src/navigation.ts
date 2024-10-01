@@ -8,12 +8,29 @@ const NAVBAR_SETTINGS_BUTTON: By = By.css('#app .sidebar .argo-icon-settings');
 const NAVBAR_USER_INFO_BUTTON: By = By.css('#app .sidebar .fa-user-circle');
 const NAVBAR_DOCS_BUTTON: By = By.css('#app .sidebar .argo-icon-docs');
 
+const LOGIN_USERNAME_INPUT: By = By.css('.login input');
+const LOGIN_PASSWORD_INPUT: By = By.css('.login input[type="password"]');
+
 export class Navigation extends Base {
     private applicationsList: ApplicationsList;
 
     public constructor(driver: WebDriver) {
         super(driver);
         this.applicationsList = new ApplicationsList(this.driver);
+    }
+
+    public async login(username: string, password: string): Promise<void> {
+        try {
+            const usernameInput = await UiTestUtilities.findUiElement(this.driver, LOGIN_USERNAME_INPUT);
+            await usernameInput.sendKeys(username);
+
+            const passwordInput = await UiTestUtilities.findUiElement(this.driver, LOGIN_PASSWORD_INPUT);
+            await passwordInput.sendKeys(password);
+
+            await passwordInput.submit();
+        } catch (err) {
+            throw new Error("Error logging in: " + err);
+        }
     }
 
     /**
