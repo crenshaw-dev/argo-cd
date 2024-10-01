@@ -520,11 +520,13 @@ jobs:
         run: |
           yarn install --frozen-lockfile --ignore-optional --non-interactive
           yarn test
+          goreman run stop-all || echo "goreman trouble"
         working-directory: ui-test/
       - name: Shut down E2E server
         run: |
           goreman run stop-all || echo "goreman trouble"
           sleep 30
+        if: ${{ failure() }}
       - name: Upload e2e-server logs
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
