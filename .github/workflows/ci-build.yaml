@@ -521,6 +521,7 @@ jobs:
       - name: Run UI e2e tests
         if: ${{ matrix.k3s.latest }}  # Only bother running for the latest version.
         run: |
+          sleep 120 # Give the controller more time to spin up.
           yarn install --frozen-lockfile --ignore-optional --non-interactive
           yarn test
           goreman run stop-all || echo "goreman trouble"
