@@ -483,6 +483,9 @@ jobs:
           chown runner dist
       - name: Run E2E server and wait for it being available
         timeout-minutes: 30
+        env:
+          # ARGOCD_API_URL is used by Webpack server to proxy API requests to the E2E server.
+          ARGOCD_API_URL: http://localhost:8088
         run: |
           set -x
           # Something is weird in GH runners -- there's a phantom listener for
