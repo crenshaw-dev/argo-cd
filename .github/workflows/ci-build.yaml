@@ -502,18 +502,16 @@ jobs:
             fi
             count=$((count+1))
           done
-#      - name: Run E2E testsuite
-#        run: |
-#          set -x
-#          make test-e2e-local
-#          goreman run stop-all || echo "goreman trouble"
-#          sleep 30
-#      - name: Upload e2e coverage report
-#        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
-#        with:
-#          name: e2e-code-coverage
-#          path: /tmp/coverage
-#        if: ${{ matrix.k3s.latest }}
+      - name: Run E2E testsuite
+        run: |
+          set -x
+          make test-e2e-local
+      - name: Upload e2e coverage report
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        with:
+          name: e2e-code-coverage
+          path: /tmp/coverage
+        if: ${{ matrix.k3s.latest }}
       - uses: browser-actions/setup-chrome@facf10a55b9caf92e0cc749b4f82bf8220989148 # v1.7.2
         with:
           install-chromedriver: true
@@ -526,6 +524,7 @@ jobs:
           yarn test
           goreman run stop-all || echo "goreman trouble"
         working-directory: ui-test/
+      # In case a previous step failed, attempt to shut down the E2E server. This ensures logs get flushed and uploaded.
       - name: Shut down E2E server
         run: |
           goreman run stop-all || echo "goreman trouble"
