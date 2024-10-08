@@ -6617,6 +6617,10 @@
           "type": "boolean",
           "title": "SkipCrds skips custom resource definition installation step (Helm's --skip-crds)"
         },
+        "skipSchemaValidation": {
+          "type": "boolean",
+          "title": "SkipSchemaValidation disables schema validation of Helm values"
+        },
         "skipTests": {
           "description": "SkipTests skips test manifest installation step (Helm's --skip-tests).",
           "type": "boolean"

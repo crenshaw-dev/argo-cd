@@ -272,6 +272,9 @@ func (a *Actions) prepareCreateAppArgs(args []string) []string {
 	if a.context.helmSkipTests {
 		args = append(args, "--helm-skip-tests")
 	}
+	if a.context.helmSkipSchemaValidation {
+		args = append(args, "--helm-skip-schema-validation")
+	}
 	return args
 }
 

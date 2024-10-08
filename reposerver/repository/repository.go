@@ -1190,6 +1190,7 @@ func helmTemplate(appPath string, repoRoot string, env *v1alpha1.Env, q *apiclie
 		passCredentials = appHelm.PassCredentials
 		templateOpts.SkipCrds = appHelm.SkipCrds
 		templateOpts.SkipTests = appHelm.SkipTests
+		templateOpts.SkipSchemaValidation = appHelm.SkipSchemaValidation
 	}
 	if templateOpts.Name == "" {
 		templateOpts.Name = q.AppName

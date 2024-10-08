@@ -338,9 +338,10 @@ type TemplateOpts struct {
 	Values      []pathutil.ResolvedFilePath
 	// ExtraValues is the randomly-generated path to the temporary values file holding the contents of
 	// spec.source.helm.values/valuesObject.
-	ExtraValues pathutil.ResolvedFilePath
-	SkipCrds    bool
-	SkipTests   bool
+	ExtraValues          pathutil.ResolvedFilePath
+	SkipCrds             bool
+	SkipTests            bool
+	SkipSchemaValidation bool
 }
 
 func cleanSetParameters(val string) string {
@@ -411,6 +412,9 @@ func (c *Cmd) template(chartPath string, opts *TemplateOpts) (string, string, er
 	}
 	if opts.SkipTests {
 		args = append(args, "--skip-tests")
+	}
+	if opts.SkipSchemaValidation {
+		args = append(args, "--skip-schema-validation")
 	}
 
 	out, command, err := c.run(args...)
