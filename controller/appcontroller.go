@@ -1810,6 +1810,7 @@ func (ctrl *ApplicationController) needRefreshAppStatus(app *appv1.Application, 
 	}
 
 	if reason != "" {
+		logCtx = logCtx.WithField("resourceVersion", app.ResourceVersion).WithField("reconciledAt", app.Status.ReconciledAt)
 		logCtx.Infof("Refreshing app status (%s), level (%d)", reason, compareWith)
 		return true, refreshType, compareWith
 	}
