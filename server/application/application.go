@@ -790,6 +790,7 @@ func (s *Server) Get(ctx context.Context, q *application.ApplicationQuery) (*app
 	for {
 		select {
 		case <-ctx.Done():
+			log.WithField("appName", app.Name).WithField("minVersion", minVersion).Warn("application refresh deadline exceeded")
 			return nil, fmt.Errorf("application refresh deadline exceeded")
 		case event := <-events:
 			if appVersion, err := strconv.Atoi(event.Application.ResourceVersion); err == nil && appVersion > minVersion {
