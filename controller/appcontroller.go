@@ -2197,7 +2197,7 @@ func (ctrl *ApplicationController) newApplicationInformerAndLister() (cache.Shar
 	if ctrl.statusHardRefreshTimeout.Seconds() != 0 && (ctrl.statusHardRefreshTimeout < ctrl.statusRefreshTimeout) {
 		refreshTimeout = ctrl.statusHardRefreshTimeout
 	}
-	informer := cache.NewSharedIndexInformer(
+	informer := cache.NewSharedIndexInformerWithOptions(
 		&cache.ListWatch{
 			ListFunc: func(options metav1.ListOptions) (apiruntime.Object, error) {
 				// We are only interested in apps that exist in namespaces the
@@ -2220,52 +2220,55 @@ func (ctrl *ApplicationController) newApplicationInformerAndLister() (cache.Shar
 			},
 		},
 		&appv1.Application{},
-		refreshTimeout,
-		cache.Indexers{
-			cache.NamespaceIndex: func(obj interface{}) ([]string, error) {
-				app, ok := obj.(*appv1.Application)
-				if ok {
-					// We only generally work with applications that are in one
-					// the allowed namespaces.
-					if ctrl.isAppNamespaceAllowed(app) {
-						// If the application is not allowed to use the project,
-						// log an error.
-						if _, err := ctrl.getAppProj(app); err != nil {
-							ctrl.setAppCondition(app, ctrl.projectErrorToCondition(err, app))
-						} else {
-							// This call to 'ValidateDestination' ensures that the .spec.destination field of all Applications
-							// returned by the informer/lister will have server field set (if not already set) based on the name.
-							// (or, if not found, an error app condition)
+		cache.SharedIndexInformerOptions{
+			LogDeltaFIFOQueueLength: true,
+			ResyncPeriod:            refreshTimeout,
+			Indexers: cache.Indexers{
+				cache.NamespaceIndex: func(obj interface{}) ([]string, error) {
+					app, ok := obj.(*appv1.Application)
+					if ok {
+						// We only generally work with applications that are in one
+						// the allowed namespaces.
+						if ctrl.isAppNamespaceAllowed(app) {
+							// If the application is not allowed to use the project,
+							// log an error.
+							if _, err := ctrl.getAppProj(app); err != nil {
+								ctrl.setAppCondition(app, ctrl.projectErrorToCondition(err, app))
+							} else {
+								// This call to 'ValidateDestination' ensures that the .spec.destination field of all Applications
+								// returned by the informer/lister will have server field set (if not already set) based on the name.
+								// (or, if not found, an error app condition)
 
-							// If the server field is not set, set it based on the cluster name; if the cluster name can't be found,
-							// log an error as an App Condition.
-							if err := argo.ValidateDestination(context.Background(), &app.Spec.Destination, ctrl.db); err != nil {
-								ctrl.setAppCondition(app, appv1.ApplicationCondition{Type: appv1.ApplicationConditionInvalidSpecError, Message: err.Error()})
+								// If the server field is not set, set it based on the cluster name; if the cluster name can't be found,
+								// log an error as an App Condition.
+								if err := argo.ValidateDestination(context.Background(), &app.Spec.Destination, ctrl.db); err != nil {
+									ctrl.setAppCondition(app, appv1.ApplicationCondition{Type: appv1.ApplicationConditionInvalidSpecError, Message: err.Error()})
+								}
 							}
 						}
 					}
-				}
 
-				return cache.MetaNamespaceIndexFunc(obj)
-			},
-			orphanedIndex: func(obj interface{}) (i []string, e error) {
-				app, ok := obj.(*appv1.Application)
-				if !ok {
-					return nil, nil
-				}
+					return cache.MetaNamespaceIndexFunc(obj)
+				},
+				orphanedIndex: func(obj interface{}) (i []string, e error) {
+					app, ok := obj.(*appv1.Application)
+					if !ok {
+						return nil, nil
+					}
 
-				if !ctrl.isAppNamespaceAllowed(app) {
-					return nil, nil
-				}
+					if !ctrl.isAppNamespaceAllowed(app) {
+						return nil, nil
+					}
 
-				proj, err := ctrl.getAppProj(app)
-				if err != nil {
+					proj, err := ctrl.getAppProj(app)
+					if err != nil {
+						return nil, nil
+					}
+					if proj.Spec.OrphanedResources != nil {
+						return []string{app.Spec.Destination.Namespace}, nil
+					}
 					return nil, nil
-				}
-				if proj.Spec.OrphanedResources != nil {
-					return []string{app.Spec.Destination.Namespace}, nil
-				}
-				return nil, nil
+				},
 			},
 		},
 	)
