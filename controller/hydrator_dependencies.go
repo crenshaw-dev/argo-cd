@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	argoutil "github.com/argoproj/argo-cd/v2/util/argo"
 
 	"github.com/argoproj/argo-cd/v2/controller/hydrator"
 	appv1 "github.com/argoproj/argo-cd/v2/pkg/apis/application/v1alpha1"
@@ -37,6 +38,12 @@ func (ctrl *ApplicationController) GetRepoObjs(app *appv1.Application, source ap
 	appLabelKey, err := ctrl.settingsMgr.GetAppInstanceLabelKey()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get app instance label key: %w", err)
+	}
+
+	// Use the side effect of ValidateDestination to set the destination.server field if only destination.name is set.
+	err = argoutil.ValidateDestination(context.Background(), &app.Spec.Destination, ctrl.db)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to validate destination: %w", err)
 	}
 
 	// FIXME: use cache and revision cache
