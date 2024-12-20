@@ -91,6 +91,11 @@ func (s *Service) handleCommitRequest(logCtx *log.Entry, r *apiclient.CommitHydr
 	}
 
 	logCtx = logCtx.WithField("repo", r.Repo.Repo)
+
+	if r.Repo.GithubAppId != int64(0) && r.Repo.GithubAppInstallationId != int64(0) && r.Repo.GithubAppPrivateKey != "" {
+		logCtx.WithFields(log.Fields{"githubAppId": r.Repo.GithubAppId, "githubAppInstallationId": r.Repo.GithubAppInstallationId}).Debug("Using GitHub App credentials")
+	}
+
 	logCtx.Debug("Initiating git client")
 	gitClient, dirPath, cleanup, err := s.initGitClient(logCtx, r)
 	if err != nil {
