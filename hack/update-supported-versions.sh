@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+git branch
+
+exit 1
+
 out="| Argo CD version | Kubernetes versions |\n"
 out+="|-----------------|---------------------|\n"
 
