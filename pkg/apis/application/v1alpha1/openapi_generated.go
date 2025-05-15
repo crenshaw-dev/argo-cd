@@ -5196,7 +5196,7 @@ func schema_pkg_apis_application_v1alpha1_PullRequestGeneratorGitLab(ref common.
 					},
 					"pullRequestState": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PullRequestState is an additional MRs filter to get only those with a certain state. Default: \"\" (all states)",
+							Description: "PullRequestState is an additional MRs filter to get only those with a certain state. Default: \"\" (all states). Valid values: opened, closed, merged, locked\"",
 							Type:        []string{"string"},
 							Format:      "",
 						},

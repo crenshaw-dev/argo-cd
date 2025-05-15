@@ -7860,7 +7860,7 @@
         },
         "pullRequestState": {
           "type": "string",
-          "title": "PullRequestState is an additional MRs filter to get only those with a certain state. Default: \"\" (all states)"
+          "title": "PullRequestState is an additional MRs filter to get only those with a certain state. Default: \"\" (all states).\nValid values: opened, closed, merged, locked\""
         },
         "tokenRef": {
           "$ref": "#/definitions/v1alpha1SecretRef"
