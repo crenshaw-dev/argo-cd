@@ -101,52 +101,6 @@ func TestGetSecretByName(t *testing.T) {
 	})
 }
 
-func TestGetExtensionConfigs(t *testing.T) {
-	type cases struct {
-		name        string
-		input       map[string]string
-		expected    map[string]string
-		expectedLen int
-	}
-
-	testCases := []cases{
-		{
-			name:        "will return main config successfully",
-			expectedLen: 1,
-			input: map[string]string{
-				extensionConfig: "test",
-			},
-			expected: map[string]string{
-				"": "test",
-			},
-		},
-		{
-			name:        "will return main and additional config successfully",
-			expectedLen: 2,
-			input: map[string]string{
-				extensionConfig:                       "main config",
-				extensionConfig + ".anotherExtension": "another config",
-			},
-			expected: map[string]string{
-				"":                 "main config",
-				"anotherExtension": "another config",
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			// When
-			output := getExtensionConfigs(tc.input)
-
-			// Then
-			assert.Len(t, output, tc.expectedLen)
-			assert.Equal(t, tc.expected, output)
-		})
-	}
-}
-
 func TestGetResourceFilter(t *testing.T) {
 	data := map[string]string{
 		"resource.exclusions": "\n  - apiGroups: [\"group1\"]\n    kinds: [\"kind1\"]\n    clusters: [\"cluster1\"]\n",
@@ -1074,28 +1028,6 @@ func TestRedirectURL(t *testing.T) {
 		dexRedirectURL, err := settings.DexRedirectURL()
 		require.NoError(t, err)
 		assert.Equal(t, expected[1], dexRedirectURL)
-	}
-}
-
-func Test_validateExternalURL(t *testing.T) {
-	tests := []struct {
-		name   string
-		url    string
-		errMsg string
-	}{
-		{name: "Valid URL", url: "https://my.domain.com"},
-		{name: "No URL - Valid", url: ""},
-		{name: "Invalid URL", url: "my.domain.com", errMsg: "URL must include http or https protocol"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateExternalURL(tt.url)
-			if tt.errMsg != "" {
-				assert.EqualError(t, err, tt.errMsg)
-			} else {
-				require.NoError(t, err)
-			}
-		})
 	}
 }
 

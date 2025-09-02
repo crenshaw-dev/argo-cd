@@ -1015,7 +1015,7 @@ func TestManifestGenErrorCacheByMinutesElapsed(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			service := newService(t, ".")
 
-			// Here we simulate the passage of time by overriding the now() function of Service
+			// Here we simulate the passage of time by overriding the now() function of ExtensionService
 			currentTime := time.Now()
 			service.now = func() time.Time {
 				return currentTime

@@ -25,3 +25,11 @@ type ApplicationSetListerExpansion interface{}
 // ApplicationSetNamespaceListerExpansion allows custom methods to be added to
 // ApplicationSetNamespaceLister.
 type ApplicationSetNamespaceListerExpansion interface{}
+
+// ConfigurationListerExpansion allows custom methods to be added to
+// ConfigurationLister.
+type ConfigurationListerExpansion interface{}
+
+// ConfigurationNamespaceListerExpansion allows custom methods to be added to
+// ConfigurationNamespaceLister.
+type ConfigurationNamespaceListerExpansion interface{}

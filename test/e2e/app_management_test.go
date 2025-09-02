@@ -154,7 +154,7 @@ func TestGetLogsAllow(t *testing.T) {
 			assert.Contains(t, out, "Hi")
 		}).
 		And(func(app *Application) {
-			out, err := fixture.RunCliWithRetry(appLogsRetryCount, "app", "logs", app.Name, "--kind", "Service")
+			out, err := fixture.RunCliWithRetry(appLogsRetryCount, "app", "logs", app.Name, "--kind", "ExtensionService")
 			require.NoError(t, err)
 			assert.NotContains(t, out, "Hi")
 		})
@@ -445,7 +445,7 @@ func TestDeleteAppResource(t *testing.T) {
 		Expect(SyncStatusIs(SyncStatusCodeSynced)).
 		And(func(_ *Application) {
 			// app should be listed
-			if _, err := fixture.RunCli("app", "delete-resource", fixture.Name(), "--kind", "Service", "--resource-name", "guestbook-ui"); err != nil {
+			if _, err := fixture.RunCli("app", "delete-resource", fixture.Name(), "--kind", "ExtensionService", "--resource-name", "guestbook-ui"); err != nil {
 				require.NoError(t, err)
 			}
 		}).
@@ -581,7 +581,7 @@ func TestTrackAppStateAndSyncApp(t *testing.T) {
 		Expect(OperationPhaseIs(OperationSucceeded)).
 		Expect(SyncStatusIs(SyncStatusCodeSynced)).
 		Expect(HealthIs(health.HealthStatusHealthy)).
-		Expect(Success(fmt.Sprintf("Service     %s  guestbook-ui  Synced ", fixture.DeploymentNamespace()))).
+		Expect(Success(fmt.Sprintf("ExtensionService     %s  guestbook-ui  Synced ", fixture.DeploymentNamespace()))).
 		Expect(Success(fmt.Sprintf("apps   Deployment  %s  guestbook-ui  Synced", fixture.DeploymentNamespace()))).
 		Expect(Event(argo.EventReasonResourceUpdated, "sync")).
 		And(func(app *Application) {
@@ -2056,7 +2056,7 @@ func TestNotPermittedResources(t *testing.T) {
 		SourceRepos:  []string{"*"},
 		Destinations: []ApplicationDestination{{Namespace: fixture.DeploymentNamespace(), Server: "*"}},
 		NamespaceResourceBlacklist: []metav1.GroupKind{
-			{Group: "", Kind: "Service"},
+			{Group: "", Kind: "ExtensionService"},
 		},
 	}).
 		And(func() {
@@ -2076,7 +2076,7 @@ func TestNotPermittedResources(t *testing.T) {
 			_, hasIngress := statusByKind[kube.IngressKind]
 			assert.False(t, hasIngress, "Ingress is prohibited not managed object and should be even visible to user")
 			serviceStatus := statusByKind[kube.ServiceKind]
-			assert.Equal(t, SyncStatusCodeUnknown, serviceStatus.Status, "Service is prohibited managed resource so should be set to Unknown")
+			assert.Equal(t, SyncStatusCodeUnknown, serviceStatus.Status, "ExtensionService is prohibited managed resource so should be set to Unknown")
 			deploymentStatus := statusByKind[kube.DeploymentKind]
 			assert.Equal(t, SyncStatusCodeOutOfSync, deploymentStatus.Status)
 		}).
@@ -2465,7 +2465,7 @@ func TestAppLogs(t *testing.T) {
 			assert.Contains(t, out, "Hi")
 		}).
 		And(func(app *Application) {
-			out, err := fixture.RunCliWithRetry(appLogsRetryCount, "app", "logs", app.Name, "--kind", "Service")
+			out, err := fixture.RunCliWithRetry(appLogsRetryCount, "app", "logs", app.Name, "--kind", "ExtensionService")
 			require.NoError(t, err)
 			assert.NotContains(t, out, "Hi")
 		})

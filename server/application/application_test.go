@@ -2422,7 +2422,7 @@ func TestLogsGetSelectedPod(t *testing.T) {
 
 	t.Run("NoMatchingPods", func(t *testing.T) {
 		group := ""
-		kind := "Service"
+		kind := "ExtensionService"
 		name := "service"
 		podQuery := application.ApplicationPodLogsQuery{
 			Name:         &appName,

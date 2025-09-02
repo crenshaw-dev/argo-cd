@@ -7,6 +7,7 @@ package github.com.argoproj.argo_cd.v3.pkg.apis.application.v1alpha1;
 
 import "k8s.io/api/core/v1/generated.proto";
 import "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1/generated.proto";
+import "k8s.io/apimachinery/pkg/api/resource/generated.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "k8s.io/apimachinery/pkg/runtime/generated.proto";
 import "k8s.io/apimachinery/pkg/runtime/schema/generated.proto";
@@ -25,6 +26,27 @@ message AWSAuthConfig {
 
   // Profile contains optional role ARN. If set then AWS IAM Authenticator uses the profile to perform cluster operations instead of the default AWS credential provider chain.
   optional string profile = 3;
+}
+
+message Account {
+  optional string name = 1;
+
+  optional bool enabled = 2;
+
+  optional bool allowLogin = 3;
+
+  optional bool allowApiKey = 4;
+}
+
+message Action {
+  optional string name = 1;
+
+  // +kubebuilder:validation:MinLength=1
+  optional string script = 2;
+}
+
+message Analytics {
+  optional GoogleAnalytics google = 1;
 }
 
 // AppHealthStatus contains information about the currently observed health state of an application
@@ -148,6 +170,28 @@ message ApplicationCondition {
 
   // LastTransitionTime is the time the condition was last observed
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time lastTransitionTime = 3;
+}
+
+// ApplicationConfig configures application-level settings for reconciliation, sync, RBAC, events, and cluster options.
+message ApplicationConfig {
+  // Reconciliation configures the reconciliation timeout and jitter for applications.
+  optional Reconciliation reconciliation = 1;
+
+  // Sync configures application sync options, including impersonation.
+  optional Sync sync = 2;
+
+  // RespectRBAC instructs controller to only watch for resources it has permissions to list. Can be "disabled", "normal", or "strict".
+  // Disabled by default.
+  // +kubebuilder:default=disabled
+  // +kubebuilder:validation:Enum=disabled;normal;strict
+  optional string respectRBAC = 3;
+
+  // Events configures which metadata.label keys to include or exclude in Kubernetes events generated for Applications.
+  optional Events events = 4;
+
+  // InClusterEnabled indicates whether to allow in-cluster server address. Enabled by default.
+  // +kubebuilder:default=true
+  optional bool inClusterEnabled = 5;
 }
 
 // ApplicationDestination holds information about the application's destination
@@ -762,6 +806,46 @@ message ApplicationWatchEvent {
   optional Application application = 2;
 }
 
+message Authentication {
+  optional bool anonymousUsersEnabled = 1;
+
+  // +kubebuilder:default=`24h`
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration sessionDuration = 2;
+
+  // +kubebuilder:default=`^.{8,32}$`
+  optional string passwordPattern = 3;
+
+  optional bool adminEnabled = 4;
+
+  repeated Account accounts = 5;
+
+  optional Dex dex = 6;
+
+  optional OIDC oidc = 7;
+}
+
+message AzureOIDCConfig {
+  optional bool useWorkloadIdentity = 1;
+}
+
+// Backend configures connection parameters and services for an extension backend.
+message Backend {
+  // ConnectionTimeout is the maximum time to wait for a backend connection to complete.
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration connectionTimeout = 1;
+
+  // KeepAlive specifies the interval between keep-alive probes for an active connection.
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration keepAlive = 2;
+
+  // IdleConnectionTimeout is the maximum idle time before closing a keep-alive connection.
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration idleConnectionTimeout = 3;
+
+  // MaxIdleConnections controls the maximum number of idle connections to the backend.
+  optional int64 maxIdleConnections = 4;
+
+  // Services lists the backend service URLs and cluster mappings.
+  repeated Service services = 5;
+}
+
 // Backoff is the backoff strategy to use on subsequent retries for failing syncs
 message Backoff {
   // Duration is the amount to back off. Default unit is seconds, but could also be a duration (e.g. "2m", "1h")
@@ -772,6 +856,17 @@ message Backoff {
 
   // MaxDuration is the maximum amount of time allowed for the backoff strategy
   optional string maxDuration = 3;
+}
+
+message Banner {
+  optional string content = 1;
+
+  // +kubebuilder:validation:Pattern=`^https?://`
+  optional string url = 2;
+
+  optional bool permanent = 3;
+
+  optional string position = 4;
 }
 
 // BasicAuthBitbucketServer defines the username/(password or personal access token) for Basic auth.
@@ -804,6 +899,26 @@ message ChartDetails {
 
   // List of maintainer details, name and email, e.g. ["John Doe <john_doe@my-company.com>"]
   repeated string maintainers = 3;
+}
+
+message ChatHelp {
+  optional string url = 1;
+
+  optional string text = 2;
+
+  // +listType=map
+  // +listMapKey=architecture
+  repeated Download download = 3;
+}
+
+message Claim {
+  optional string name = 1;
+
+  optional bool essential = 2;
+
+  optional string value = 3;
+
+  repeated string values = 4;
 }
 
 // Cluster is the definition of a cluster resource
@@ -889,6 +1004,15 @@ message ClusterConfig {
 
   // ProxyURL is the URL to the proxy to be used for all requests send to the server
   optional string proxyUrl = 8;
+}
+
+// ClusterConfiguration defines a cluster name and server address for service routing.
+message ClusterConfiguration {
+  // Name is the cluster name for service routing.
+  optional string name = 1;
+
+  // Server is the cluster server address for service routing.
+  optional string server = 2;
 }
 
 // ClusterGenerator defines a generator to match against clusters registered with ArgoCD.
@@ -1012,6 +1136,49 @@ message ConfigMapKeyRef {
   optional string key = 2;
 }
 
+// Configuration is the Schema for the configurations API.
+// +genclient
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:path=configurations,shortName=config;configs
+message Configuration {
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  optional ConfigurationSpec spec = 2;
+
+  optional ConfigurationStatus status = 3;
+}
+
+// ConfigurationList contains a list of Configuration.
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+message ConfigurationList {
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+
+  repeated Configuration items = 2;
+}
+
+// ConfigurationSpec defines the desired state of Configuration.
+message ConfigurationSpec {
+  optional ResourceCustomizations resourceCustomizations = 1;
+
+  optional Manifests manifests = 2;
+
+  optional ResourceTracking resourceTracking = 3;
+
+  // InstallationID is an optional unique identifier for this Argo CD installation. It is not set by default.
+  optional string installationID = 4;
+
+  optional Server server = 5;
+
+  optional ApplicationConfig application = 6;
+
+  repeated GlobalProject globalProjects = 7;
+}
+
+// ConfigurationStatus defines the observed state of Configuration.
+message ConfigurationStatus {
+}
+
 // ConnectionState contains information about remote resource connection state, currently used for clusters and repositories
 message ConnectionState {
   // Status contains the current status indicator for the connection
@@ -1022,6 +1189,61 @@ message ConnectionState {
 
   // ModifiedAt contains the timestamp when this connection status has been determined
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time attemptedAt = 3;
+}
+
+message Connector {
+  optional string type = 1;
+
+  optional string id = 2;
+
+  optional string name = 3;
+
+  optional ConnectorConfig config = 4;
+}
+
+message ConnectorConfig {
+  optional string clientID = 1;
+
+  optional string clientSecret = 2;
+
+  repeated Org orgs = 3;
+}
+
+// DeepLinks defines project, application, and resource-level deep links for the ArgoCD UI.
+message DeepLinks {
+  // Project contains deep links for projects.
+  repeated Link project = 1;
+
+  // Application contains deep links for applications.
+  repeated Link application = 2;
+
+  // Resource contains deep links for resources.
+  repeated Link resource = 3;
+}
+
+message Dex {
+  repeated Connector connectors = 1;
+
+  repeated StaticClient staticClients = 2;
+}
+
+message Differences {
+  // +listMapKey=group
+  // +listMapKey=kind
+  // +listType=map
+  repeated Rule rules = 1;
+}
+
+message Discovery {
+  // +kubebuilder:validation:MinLength=1
+  optional string script = 1;
+}
+
+message Download {
+  // +kubebuilder:validation:Enum=darwin-amd64;darwin-arm64;windows-amd64;linux-amd64;linux-arm64;linux-ppc64le;linux-s390x
+  optional string architecture = 1;
+
+  optional string path = 2;
 }
 
 // DrySource specifies a location for dry "don't repeat yourself" manifest source information.
@@ -1065,6 +1287,22 @@ message EnvEntry {
   optional string value = 2;
 }
 
+// Events configures which metadata.label keys to include or exclude in Kubernetes events generated for Applications.
+message Events {
+  // Labels configures which metadata.label keys to include or exclude in events.
+  optional Labels labels = 1;
+}
+
+// Exec configures the UI exec feature and allowed shells.
+message Exec {
+  // Enabled indicates whether the UI exec feature is enabled.
+  optional bool enabled = 1;
+
+  // Shells restricts which shells are allowed for exec, and in which order they are attempted.
+  // +kubebuilder:default={bash,sh,powershell,cmd}
+  repeated string shells = 2;
+}
+
 // ExecProviderConfig is config used to call an external command to perform cluster authentication
 // See: https://godoc.org/k8s.io/client-go/tools/clientcmd/api#ExecConfig
 message ExecProviderConfig {
@@ -1082,6 +1320,20 @@ message ExecProviderConfig {
 
   // This text is shown to the user when the executable doesn't seem to be present
   optional string installHint = 5;
+}
+
+// Extension defines an ArgoCD UI/API extension and its backend configuration.
+message Extension {
+  // Name defines the endpoint used to register the extension route.
+  optional string name = 1;
+
+  // Backend configures the extension backend connection and services.
+  optional Backend backend = 2;
+}
+
+message FineGrainedInheritance {
+  // +kubebuilder:default=false
+  optional bool enabled = 1;
 }
 
 message GitDirectoryGeneratorItem {
@@ -1115,6 +1367,12 @@ message GitGenerator {
   map<string, string> values = 8;
 }
 
+message GlobalProject {
+  optional string projectName = 1;
+
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.LabelSelector labelSelector = 2;
+}
+
 // GnuPGPublicKey is a representation of a GnuPG public key
 message GnuPGPublicKey {
   // KeyID specifies the key ID, in hexadecimal string format
@@ -1143,6 +1401,21 @@ message GnuPGPublicKeyList {
   repeated GnuPGPublicKey items = 2;
 }
 
+message GoogleAnalytics {
+  // +kubebuilder:default=true
+  optional bool anonymizeUsers = 1;
+
+  optional string trackingId = 2;
+}
+
+message Health {
+  optional string group = 1;
+
+  optional string kind = 2;
+
+  optional string script = 3;
+}
+
 // HealthStatus contains information about the currently observed health state of a resource
 message HealthStatus {
   // Status holds the status code of the resource
@@ -1155,6 +1428,15 @@ message HealthStatus {
   //
   // Deprecated: this field is not used and will be removed in a future release.
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time lastTransitionTime = 3;
+}
+
+message Helm {
+  // +kubebuilder:default=true
+  optional bool enabled = 1;
+
+  // ValuesFileSchemes specifies which file schemes to allow for Helm values files. Default allowed schemes are "http" and "https".
+  // +kubebuilder:default={http,https}
+  repeated string valuesFileSchemes = 2;
 }
 
 // HelmFileParameter is a file parameter that's passed to helm template during manifest generation
@@ -1181,6 +1463,10 @@ message HelmParameter {
 
   // ForceString determines whether to tell Helm to interpret booleans and numbers as strings
   optional bool forceString = 3;
+}
+
+message Help {
+  optional ChatHelp chat = 1;
 }
 
 // HostInfo holds metadata and resource usage metrics for a specific host in the cluster.
@@ -1244,6 +1530,27 @@ message HydrateTo {
   optional string targetBranch = 1;
 }
 
+message Ignore {
+  optional Differences differences = 1;
+
+  optional Updates updates = 2;
+}
+
+// Impersonation enables application sync to use a custom service account.
+message Impersonation {
+  // Enabled enables application sync impersonation.
+  optional bool enabled = 1;
+}
+
+message InclusionOrExclusion {
+  repeated string groups = 1;
+
+  repeated string kinds = 2;
+
+  // Clusters specifies which clusters this inclusion or exclusion applies to. If empty, applies to all clusters.
+  repeated string clusters = 3;
+}
+
 message Info {
   optional string name = 1;
 
@@ -1273,6 +1580,11 @@ message JWTTokens {
   repeated JWTToken items = 1;
 }
 
+message Jsonnet {
+  // +kubebuilder:default=true
+  optional bool enabled = 1;
+}
+
 // JsonnetVar represents a variable to be passed to jsonnet during manifest generation
 message JsonnetVar {
   optional string name = 1;
@@ -1293,6 +1605,18 @@ message KnownTypeField {
   // Type specifies the expected Kubernetes type for the field, such as "cpu" or "memory".
   // This helps in converting values between different formats (e.g., "0.1" to "100m" for CPU).
   optional string type = 2;
+}
+
+message Kustomize {
+  // +kubebuilder:default=true
+  optional bool enabled = 1;
+
+  optional string buildOptions = 2;
+
+  // Versions is a list of custom Kustomize versions. Each version must have a unique name.
+  // +listMapKey=name
+  // +listType=map
+  repeated Version versions = 3;
 }
 
 message KustomizeGvk {
@@ -1365,6 +1689,33 @@ message KustomizeVersion {
   optional string buildOptions = 3;
 }
 
+// Labels configures which metadata.label keys to include or exclude in events.
+message Labels {
+  // Include is a list of metadata.label keys to include in events. Supports wildcards.
+  repeated string include = 1;
+
+  // Exclude is a list of metadata.label keys to exclude from events. Supports wildcards.
+  repeated string exclude = 2;
+}
+
+// Link defines a UI deep link, with optional conditional display and icon.
+message Link {
+  // Url is the target URL for the link. Supports Go template expressions.
+  optional string url = 1;
+
+  // Title is the display text for the link.
+  optional string title = 2;
+
+  // Description is an optional description for the link.
+  optional string description = 3;
+
+  // IconClass is an optional icon CSS class for the link.
+  optional string iconClass = 4;
+
+  // If is an optional condition for displaying the link, using expr-lang expressions.
+  optional string if = 5;
+}
+
 // ListGenerator include items info
 message ListGenerator {
   // +kubebuilder:validation:Optional
@@ -1379,6 +1730,14 @@ message ManagedNamespaceMetadata {
   map<string, string> labels = 1;
 
   map<string, string> annotations = 2;
+}
+
+message Manifests {
+  optional Kustomize kustomize = 1;
+
+  optional Jsonnet jsonnet = 2;
+
+  optional Helm helm = 3;
 }
 
 // MatrixGenerator generates the cartesian product of two sets of parameters. The parameters are defined by two nested
@@ -1448,6 +1807,40 @@ message OCIMetadata {
   optional string description = 7;
 }
 
+message OIDC {
+  optional string name = 1;
+
+  optional string issuer = 2;
+
+  optional string clientID = 3;
+
+  optional string clientSecret = 4;
+
+  optional string cliClientID = 5;
+
+  optional bool enableUserInfoGroups = 6;
+
+  optional string userInfoPath = 7;
+
+  optional string userInfoCacheExpiration = 8;
+
+  repeated string requestedScopes = 9;
+
+  // +listType=map
+  // +listMapKey=name
+  repeated Claim requestedIDTokenClaims = 10;
+
+  optional string logoutURL = 11;
+
+  optional string rootCA = 12;
+
+  optional bool enablePKCEAuthentication = 13;
+
+  optional string domainHint = 14;
+
+  optional AzureOIDCConfig azure = 15;
+}
+
 // Operation contains information about a requested or running operation
 message Operation {
   // Sync contains parameters for the operation
@@ -1506,6 +1899,12 @@ message OptionalMap {
   // Map is the value of a map type parameter.
   // +optional
   map<string, string> map = 1;
+}
+
+message Org {
+  optional string name = 1;
+
+  repeated string teams = 2;
 }
 
 // OrphanedResourceKey is a reference to a resource to be ignored from
@@ -1757,6 +2156,20 @@ message PullRequestGeneratorGithub {
   repeated string labels = 6;
 }
 
+message RBAC {
+  // +kubebuilder:default=false
+  optional FineGrainedInheritance fineGrainedInheritance = 1;
+}
+
+// Reconciliation configures reconciliation timeout and jitter for applications.
+message Reconciliation {
+  // Timeout is the amount of time before ArgoCD tries to discover new manifest versions. Disabled if set to 0.
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration timeout = 1;
+
+  // Jitter is the maximum duration added to the sync timeout to spread out refreshes. Disabled if set to 0.
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration jitter = 2;
+}
+
 message RefTarget {
   optional Repository repo = 1;
 
@@ -1997,6 +2410,38 @@ message ResourceActions {
   optional bool mergeBuiltinActions = 3;
 }
 
+message ResourceActionsConfig {
+  optional string group = 1;
+
+  optional string kind = 2;
+
+  optional Discovery discovery = 3;
+
+  // +kubebuilder:validation:MinItems=1
+  repeated Action actions = 4;
+}
+
+// ResourceCustomizations defines special treatment for specific resources.
+message ResourceCustomizations {
+  // Ignore defines resources and fields to ignore during comparison.
+  optional Ignore ignore = 1;
+
+  // Health defines custom health checks for specific resources. Many health checks are built-in and are not defined
+  // here. Checks defined here override built-in checks.
+  repeated Health health = 2;
+
+  // Actions defines custom actions that can be performed on specific resources. Many actions are built-in and are not
+  // defined here. Actions defined here override built-in actions.
+  repeated ResourceActionsConfig actions = 3;
+
+  // Exclusions is a list of resources to exclude from Argo CD management. A number of resources are excluded by
+  // default. Those defaults can be overridden by specifying them here. If you'd like to add to the defaults, you must
+  // patch the field instead of replacing it.
+  repeated InclusionOrExclusion exclusions = 4;
+
+  repeated InclusionOrExclusion inclusions = 5;
+}
+
 // ResourceDiff holds the diff between a live and target resource object in Argo CD.
 // It is used to compare the desired state (from Git/Helm) with the actual state in the cluster.
 message ResourceDiff {
@@ -2218,6 +2663,18 @@ message ResourceStatus {
   optional bool requiresDeletionConfirmation = 11;
 }
 
+message ResourceTracking {
+  // Method specifies how Argo CD tracks resources. Supported values are "annotation", "label", and "annotation+label".
+  // The default is "annotation".
+  // +kubebuilder:default=annotation
+  // +kubebuilder:validation:Enum=annotation;label;annotation+label
+  optional string method = 1;
+
+  // InstanceLabelKey is the label key to use to uniquely identify the instance of an application. The default is "app.kubernetes.io/instance".
+  // +kubebuilder:default=app.kubernetes.io/instance
+  optional string instanceLabelKey = 2;
+}
+
 // RetryStrategy contains information about the strategy to apply when a sync failed
 message RetryStrategy {
   // Limit is the maximum number of attempts for retrying a failed sync. If set to 0, no retries will be performed.
@@ -2284,6 +2741,19 @@ message RevisionMetadata {
 message RevisionReference {
   // Commit contains metadata about the commit that is related in some way to another commit.
   optional CommitMetadata commit = 1;
+}
+
+// Rule defines a rule for ignoring differences or allowing updates for specific resources and fields.
+message Rule {
+  optional string group = 1;
+
+  optional string kind = 2;
+
+  repeated string jsonPointers = 3;
+
+  repeated string jqPathExpressions = 4;
+
+  repeated string managedFieldsManagers = 5;
 }
 
 // SCMProviderGenerator defines a generator that scrapes a SCMaaS API to find candidate repos.
@@ -2486,6 +2956,39 @@ message SecretRef {
   optional string key = 2;
 }
 
+message Server {
+  // +kubebuilder:validation:Pattern=`^https?://`
+  optional string url = 1;
+
+  // +kubebuilder:validation:item:Pattern=`^https?://`
+  repeated string additionalUrls = 2;
+
+  optional Authentication authentication = 3;
+
+  optional UI ui = 4;
+
+  // Max number of pod logs to render in the UI. Default is 10.
+  // +kubebuilder:default=10
+  optional int64 maxPodLogsToRender = 5;
+
+  optional Exec exec = 6;
+
+  repeated Extension extensions = 7;
+
+  optional Webhook webhook = 8;
+
+  optional RBAC rbac = 9;
+}
+
+// Service defines a backend service URL and optional cluster mapping for extension routing.
+message Service {
+  // Url is the address where the extension backend service is available.
+  optional string url = 1;
+
+  // Cluster maps the service to a specific cluster destination.
+  optional ClusterConfiguration cluster = 2;
+}
+
 // SignatureKey is the specification of a key required to verify commit signatures with
 message SignatureKey {
   // The ID of the key in hexadecimal notation
@@ -2515,6 +3018,22 @@ message SourceHydratorStatus {
   optional HydrateOperation currentOperation = 2;
 }
 
+message StaticClient {
+  optional string id = 1;
+
+  optional string name = 2;
+
+  repeated string redirectURIs = 3;
+
+  optional string secret = 4;
+}
+
+message StatusBadge {
+  optional bool enabled = 1;
+
+  optional string url = 2;
+}
+
 // SuccessfulHydrateOperation contains information about the most recent successful hydrate operation
 message SuccessfulHydrateOperation {
   // DrySHA holds the resolved revision (sha) of the dry source as of the most recent reconciliation
@@ -2525,6 +3044,12 @@ message SuccessfulHydrateOperation {
 
   // SourceHydrator holds the hydrator config used for the hydrate operation
   optional SourceHydrator sourceHydrator = 7;
+}
+
+// Sync configures application sync options.
+message Sync {
+  // Impersonation enables application sync to use a custom service account via impersonation.
+  optional Impersonation impersonation = 1;
 }
 
 // SyncOperation contains details about a sync operation.
@@ -2736,9 +3261,58 @@ message TLSClientConfig {
   optional bytes caData = 5;
 }
 
+message TLSConfig {
+  optional string insecureSkipVerify = 1;
+}
+
 message TagFilter {
   optional string key = 1;
 
   optional string value = 2;
+}
+
+message UI {
+  optional Analytics analytics = 1;
+
+  optional Help help = 2;
+
+  optional StatusBadge statusBadge = 3;
+
+  optional string cssUrl = 4;
+
+  optional Banner banner = 5;
+
+  optional DeepLinks deepLinks = 6;
+
+  repeated string maskSensitiveAnnotations = 7;
+
+  repeated string customLabels = 8;
+
+  // AllowedNodeLabels specifies which node labels may be shown in the UI. By default, none are shown.
+  repeated string allowedNodeLabels = 9;
+}
+
+message Updates {
+  // +kubebuilder:default=true
+  optional bool enabled = 1;
+
+  // +listMapKey=group
+  // +listMapKey=kind
+  // +listType=map
+  repeated Rule rules = 2;
+}
+
+message Version {
+  optional string name = 1;
+
+  optional string path = 2;
+
+  optional string buildOptions = 3;
+}
+
+// Webhook configures the webhook server settings.
+message Webhook {
+  // MaxPayloadSize is the maximum size (in MB) of the payload that can be sent to the webhook server.
+  optional .k8s.io.apimachinery.pkg.api.resource.Quantity maxPayloadSize = 1;
 }
 

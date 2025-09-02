@@ -42,7 +42,7 @@ func TestNormalizeObjectWithMatchedGroupKind(t *testing.T) {
 func TestNormalizeNoMatchedGroupKinds(t *testing.T) {
 	normalizer, err := NewIgnoreNormalizer([]v1alpha1.ResourceIgnoreDifferences{{
 		Group:        "",
-		Kind:         "Service",
+		Kind:         "ExtensionService",
 		JSONPointers: []string{"/spec"},
 	}}, make(map[string]v1alpha1.ResourceOverride), IgnoreNormalizerOpts{})
 

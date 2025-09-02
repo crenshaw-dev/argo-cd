@@ -94,10 +94,10 @@ func TestIncludeResource(t *testing.T) {
 		includeAllResources = argoappv1.SyncOperationResource{Group: "*", Kind: "*", Name: "*", Namespace: "", Exclude: false}
 		// !*:*:*
 		excludeAllResources = argoappv1.SyncOperationResource{Group: "*", Kind: "*", Name: "*", Namespace: "", Exclude: true}
-		// *:Service:*
-		includeAllServiceResources = argoappv1.SyncOperationResource{Group: "*", Kind: "Service", Name: "*", Namespace: "", Exclude: false}
-		// !*:Service:*
-		excludeAllServiceResources = argoappv1.SyncOperationResource{Group: "*", Kind: "Service", Name: "*", Namespace: "", Exclude: true}
+		// *:ExtensionService:*
+		includeAllServiceResources = argoappv1.SyncOperationResource{Group: "*", Kind: "ExtensionService", Name: "*", Namespace: "", Exclude: false}
+		// !*:ExtensionService:*
+		excludeAllServiceResources = argoappv1.SyncOperationResource{Group: "*", Kind: "ExtensionService", Name: "*", Namespace: "", Exclude: true}
 		// apps:ReplicaSet:backend
 		includeAllReplicaSetResource = argoappv1.SyncOperationResource{Group: "apps", Kind: "ReplicaSet", Name: "*", Namespace: "", Exclude: false}
 		// apps:ReplicaSet:backend
@@ -113,7 +113,7 @@ func TestIncludeResource(t *testing.T) {
 		syncOperationResource []*argoappv1.SyncOperationResource
 		expectedResult        bool
 	}{
-		//--resource apps:ReplicaSet:backend --resource *:Service:*
+		//--resource apps:ReplicaSet:backend --resource *:ExtensionService:*
 		{
 			testName:              "Include ReplicaSet backend resource and all service resources",
 			name:                  "backend",
@@ -122,7 +122,7 @@ func TestIncludeResource(t *testing.T) {
 			syncOperationResource: []*argoappv1.SyncOperationResource{&includeAllServiceResources, &includeReplicaSetResource},
 			expectedResult:        true,
 		},
-		//--resource apps:ReplicaSet:backend --resource *:Service:*
+		//--resource apps:ReplicaSet:backend --resource *:ExtensionService:*
 		{
 			testName:              "Include ReplicaSet backend resource and all service resources",
 			name:                  "main-page-down",
@@ -131,7 +131,7 @@ func TestIncludeResource(t *testing.T) {
 			syncOperationResource: []*argoappv1.SyncOperationResource{&includeAllServiceResources, &includeReplicaSetResource},
 			expectedResult:        false,
 		},
-		//--resource apps:ReplicaSet:backend --resource !*:Service:*
+		//--resource apps:ReplicaSet:backend --resource !*:ExtensionService:*
 		{
 			testName:              "Include ReplicaSet backend resource and exclude all service resources",
 			name:                  "main-page-down",
@@ -140,7 +140,7 @@ func TestIncludeResource(t *testing.T) {
 			syncOperationResource: []*argoappv1.SyncOperationResource{&excludeAllServiceResources, &includeReplicaSetResource},
 			expectedResult:        false,
 		},
-		// --resource !apps:ReplicaSet:backend --resource !*:Service:*
+		// --resource !apps:ReplicaSet:backend --resource !*:ExtensionService:*
 		{
 			testName:              "Exclude ReplicaSet backend resource and all service resources",
 			name:                  "main-page-down",
@@ -158,7 +158,7 @@ func TestIncludeResource(t *testing.T) {
 			syncOperationResource: []*argoappv1.SyncOperationResource{&excludeReplicaSetResource},
 			expectedResult:        false,
 		},
-		// --resource !apps:ReplicaSet:backend --resource !*:Service:*
+		// --resource !apps:ReplicaSet:backend --resource !*:ExtensionService:*
 		{
 			testName:              "Exclude ReplicaSet backend resource and all service resources(dummy condition)",
 			name:                  "backend",
@@ -176,21 +176,21 @@ func TestIncludeResource(t *testing.T) {
 			syncOperationResource: []*argoappv1.SyncOperationResource{&includeReplicaSetResource},
 			expectedResult:        true,
 		},
-		// --resource !*:Service:*
+		// --resource !*:ExtensionService:*
 		{
-			testName:              "Exclude Service resources",
+			testName:              "Exclude ExtensionService resources",
 			name:                  "backend",
 			namespace:             "default",
-			gvk:                   schema.GroupVersionKind{Group: "", Kind: "Service"},
+			gvk:                   schema.GroupVersionKind{Group: "", Kind: "ExtensionService"},
 			syncOperationResource: []*argoappv1.SyncOperationResource{&excludeAllServiceResources},
 			expectedResult:        false,
 		},
-		// --resource *:Service:*
+		// --resource *:ExtensionService:*
 		{
-			testName:              "Include Service resources",
+			testName:              "Include ExtensionService resources",
 			name:                  "backend",
 			namespace:             "default",
-			gvk:                   schema.GroupVersionKind{Group: "", Kind: "Service"},
+			gvk:                   schema.GroupVersionKind{Group: "", Kind: "ExtensionService"},
 			syncOperationResource: []*argoappv1.SyncOperationResource{&includeAllServiceResources},
 			expectedResult:        true,
 		},
@@ -208,7 +208,7 @@ func TestIncludeResource(t *testing.T) {
 			testName:              "Exclude all resources",
 			name:                  "backend",
 			namespace:             "default",
-			gvk:                   schema.GroupVersionKind{Group: "", Kind: "Service"},
+			gvk:                   schema.GroupVersionKind{Group: "", Kind: "ExtensionService"},
 			syncOperationResource: []*argoappv1.SyncOperationResource{&excludeAllResources},
 			expectedResult:        false,
 		},
@@ -217,7 +217,7 @@ func TestIncludeResource(t *testing.T) {
 			testName:              "Include all resources",
 			name:                  "backend",
 			namespace:             "default",
-			gvk:                   schema.GroupVersionKind{Group: "", Kind: "Service"},
+			gvk:                   schema.GroupVersionKind{Group: "", Kind: "ExtensionService"},
 			syncOperationResource: []*argoappv1.SyncOperationResource{&includeAllResources},
 			expectedResult:        true,
 		},
@@ -225,7 +225,7 @@ func TestIncludeResource(t *testing.T) {
 			testName:              "No Filters",
 			name:                  "backend",
 			namespace:             "default",
-			gvk:                   schema.GroupVersionKind{Group: "", Kind: "Service"},
+			gvk:                   schema.GroupVersionKind{Group: "", Kind: "ExtensionService"},
 			syncOperationResource: []*argoappv1.SyncOperationResource{&blankValues},
 			expectedResult:        false,
 		},

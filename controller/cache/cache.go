@@ -175,7 +175,7 @@ type ResourceInfo struct {
 	AppName string
 	Images  []string
 	Health  *health.HealthStatus
-	// NetworkingInfo are available only for known types involved into networking: Ingress, Service, Pod
+	// NetworkingInfo are available only for known types involved into networking: Ingress, ExtensionService, Pod
 	NetworkingInfo *appv1.ResourceNetworkingInfo
 	// PodInfo is available for pods only
 	PodInfo *PodInfo
@@ -507,7 +507,7 @@ func (c *liveStateCache) getCluster(cluster *appv1.Cluster) (clustercache.Cluste
 
 	respectRBAC, err := c.settingsMgr.RespectRBAC()
 	if err != nil {
-		return nil, fmt.Errorf("error getting value for %v: %w", settings.RespectRBAC, err)
+		return nil, fmt.Errorf("error getting value for respecRBAC: %w", err)
 	}
 
 	clusterCacheConfig, err := cluster.RESTConfig()

@@ -20,7 +20,7 @@ import (
 func TestSelectiveSync(t *testing.T) {
 	Given(t).
 		Path("guestbook").
-		SelectedResource(":Service:guestbook-ui").
+		SelectedResource(":ExtensionService:guestbook-ui").
 		When().
 		CreateApp().
 		Sync().
@@ -28,7 +28,7 @@ func TestSelectiveSync(t *testing.T) {
 		Expect(Success("")).
 		Expect(OperationPhaseIs(OperationSucceeded)).
 		Expect(SyncStatusIs(SyncStatusCodeOutOfSync)).
-		Expect(ResourceHealthIs("Service", "guestbook-ui", health.HealthStatusHealthy)).
+		Expect(ResourceHealthIs("ExtensionService", "guestbook-ui", health.HealthStatusHealthy)).
 		Expect(ResourceHealthIs("Deployment", "guestbook-ui", health.HealthStatusMissing))
 }
 

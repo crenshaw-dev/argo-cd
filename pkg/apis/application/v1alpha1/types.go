@@ -2117,7 +2117,7 @@ type ResourceStatus struct {
 	Group string `json:"group,omitempty" protobuf:"bytes,1,opt,name=group"`
 	// Version indicates the API version of the resource (e.g., "v1", "v1beta1").
 	Version string `json:"version,omitempty" protobuf:"bytes,2,opt,name=version"`
-	// Kind specifies the type of the resource (e.g., "Deployment", "Service").
+	// Kind specifies the type of the resource (e.g., "Deployment", "ExtensionService").
 	Kind string `json:"kind,omitempty" protobuf:"bytes,3,opt,name=kind"`
 	// Namespace defines the Kubernetes namespace where the resource is located.
 	Namespace string `json:"namespace,omitempty" protobuf:"bytes,4,opt,name=namespace"`
@@ -2148,7 +2148,7 @@ func (r *ResourceStatus) GroupVersionKind() schema.GroupVersionKind {
 type ResourceDiff struct {
 	// Group represents the API group of the resource (e.g., "apps" for Deployments).
 	Group string `json:"group,omitempty" protobuf:"bytes,1,opt,name=group"`
-	// Kind represents the Kubernetes resource kind (e.g., "Deployment", "Service").
+	// Kind represents the Kubernetes resource kind (e.g., "Deployment", "ExtensionService").
 	Kind string `json:"kind,omitempty" protobuf:"bytes,2,opt,name=kind"`
 	// Namespace specifies the namespace where the resource exists.
 	Namespace string `json:"namespace,omitempty" protobuf:"bytes,3,opt,name=namespace"`
@@ -3199,7 +3199,11 @@ type ConfigManagementPlugin struct {
 
 // HelmOptions holds helm options
 type HelmOptions struct {
-	ValuesFileSchemes []string `protobuf:"bytes,1,opt,name=valuesFileSchemes"`
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled" protobuf:"bytes,1,opt,name=enabled"`
+	// ValuesFileSchemes specifies which file schemes to allow for Helm values files. Default allowed schemes are "http" and "https".
+	// +kubebuilder:default={http,https}
+	ValuesFileSchemes []string `json:"valuesFileSchemes" protobuf:"bytes,2,rep,name=valuesFileSchemes"`
 }
 
 // KustomizeVersion holds information about additional Kustomize versions
@@ -3214,6 +3218,9 @@ type KustomizeVersion struct {
 
 // KustomizeOptions are options for kustomize to use when building manifests
 type KustomizeOptions struct {
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled" protobuf:"bytes,1,opt,name=enabled"`
+
 	// BuildOptions is a string of build parameters to use when calling `kustomize build`
 	BuildOptions string `protobuf:"bytes,1,opt,name=buildOptions"`
 
@@ -3225,6 +3232,8 @@ type KustomizeOptions struct {
 	BinaryPath string `protobuf:"bytes,2,opt,name=binaryPath"`
 
 	// Versions is a list of Kustomize versions and their corresponding binary paths and build options.
+	// +listMapKey=name
+	// +listType=map
 	Versions []KustomizeVersion `protobuf:"bytes,3,rep,name=versions"`
 }
 

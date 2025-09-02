@@ -256,6 +256,6 @@ func TestNamespaceCreationWithSSA(t *testing.T) {
 		Expect(OperationPhaseIs(OperationSucceeded)).
 		Expect(ResourceHealthWithNamespaceIs("Deployment", "guestbook-ui", namespace, health.HealthStatusHealthy)).
 		Expect(ResourceSyncStatusWithNamespaceIs("Deployment", "guestbook-ui", namespace, SyncStatusCodeSynced)).
-		Expect(ResourceHealthWithNamespaceIs("Service", "guestbook-ui", namespace, health.HealthStatusHealthy)).
-		Expect(ResourceSyncStatusWithNamespaceIs("Service", "guestbook-ui", namespace, SyncStatusCodeSynced))
+		Expect(ResourceHealthWithNamespaceIs("ExtensionService", "guestbook-ui", namespace, health.HealthStatusHealthy)).
+		Expect(ResourceSyncStatusWithNamespaceIs("ExtensionService", "guestbook-ui", namespace, SyncStatusCodeSynced))
 }

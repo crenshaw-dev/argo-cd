@@ -464,7 +464,7 @@ func createAndConfigGlobalProject() error {
 	}
 
 	projGlobal.Spec.NamespaceResourceBlacklist = []metav1.GroupKind{
-		{Group: "", Kind: "Service"},
+		{Group: "", Kind: "ExtensionService"},
 	}
 
 	projGlobal.Spec.NamespaceResourceWhitelist = []metav1.GroupKind{
@@ -538,7 +538,7 @@ func TestGetVirtualProjectNoMatch(t *testing.T) {
 	require.NoError(t, err)
 
 	// app trying to sync a resource which is black listed by global project
-	_, err = fixture.RunCli("app", "sync", fixture.Name(), "--resource", ":Service:guestbook-ui", "--timeout", strconv.Itoa(10))
+	_, err = fixture.RunCli("app", "sync", fixture.Name(), "--resource", ":ExtensionService:guestbook-ui", "--timeout", strconv.Itoa(10))
 	require.NoError(t, err)
 }
 
@@ -574,7 +574,7 @@ func TestGetVirtualProjectMatch(t *testing.T) {
 	require.ErrorContains(t, err, "blocked by sync window")
 
 	// app trying to sync a resource which is black listed by global project
-	_, err = fixture.RunCli("app", "sync", fixture.Name(), "--resource", ":Service:guestbook-ui", "--timeout", strconv.Itoa(10))
+	_, err = fixture.RunCli("app", "sync", fixture.Name(), "--resource", ":ExtensionService:guestbook-ui", "--timeout", strconv.Itoa(10))
 	assert.ErrorContains(t, err, "blocked by sync window")
 }
 

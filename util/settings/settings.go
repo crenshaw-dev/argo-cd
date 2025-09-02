@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	appclientset "github.com/argoproj/argo-cd/v3/pkg/client/clientset/versioned"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -33,7 +34,6 @@ import (
 	"sigs.k8s.io/yaml"
 
 	enginecache "github.com/argoproj/gitops-engine/pkg/cache"
-	timeutil "github.com/argoproj/pkg/v2/time"
 
 	"github.com/argoproj/argo-cd/v3/common"
 	"github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
@@ -102,8 +102,6 @@ type ArgoCDSettings struct {
 	UiBannerPosition string `json:"uiBannerPosition,omitempty"` //nolint:revive //FIXME(var-naming)
 	// PasswordPattern for password regular expression
 	PasswordPattern string `json:"passwordPattern,omitempty"`
-	// BinaryUrls contains the URLs for downloading argocd binaries
-	BinaryUrls map[string]string `json:"binaryUrls,omitempty"`
 	// InClusterEnabled indicates whether to allow in-cluster server address
 	InClusterEnabled bool `json:"inClusterEnabled"`
 	// ServerRBACLogEnforceEnable temporary var indicates whether rbac will be enforced on logs
@@ -125,7 +123,7 @@ type ArgoCDSettings struct {
 	AppsInAnyNamespaceEnabled bool `json:"appsInAnyNamespaceEnabled"`
 	// ExtensionConfig configurations related to ArgoCD proxy extensions. The keys are the extension name.
 	// The value is a yaml string defined in extension.ExtensionConfigs struct.
-	ExtensionConfig map[string]string `json:"extensionConfig,omitempty"`
+	ExtensionConfig []v1alpha1.Extension `json:"extensionConfig,omitempty"`
 	// ImpersonationEnabled indicates whether Application sync privileges can be decoupled from control plane
 	// privileges using impersonation
 	ImpersonationEnabled bool `json:"impersonationEnabled"`
@@ -139,16 +137,6 @@ type GoogleAnalytics struct {
 type GlobalProjectSettings struct {
 	ProjectName   string               `json:"projectName,omitempty"`
 	LabelSelector metav1.LabelSelector `json:"labelSelector,omitempty"`
-}
-
-// Help settings
-type Help struct {
-	// the URL for getting chat help, this will typically be your Slack channel for support
-	ChatURL string `json:"chatUrl,omitempty"`
-	// the text for getting chat help, defaults to "Chat now!"
-	ChatText string `json:"chatText,omitempty"`
-	// the URLs for downloading argocd binaries
-	BinaryURLs map[string]string `json:"binaryUrl,omitempty"`
 }
 
 // oidcConfig is the same as the public OIDCConfig, except the public one excludes the AllowedAudiences and the
@@ -389,47 +377,17 @@ type RepositoryCredentials struct {
 	UseAzureWorkloadIdentity bool `json:"useAzureWorkloadIdentity,omitempty"`
 }
 
-// DeepLink structure
-type DeepLink struct {
-	// URL that the deep link will redirect to
-	URL string `json:"url"`
-	// Title that will be displayed in the UI corresponding to that link
-	Title string `json:"title"`
-	// Description (optional) a description for what the deep link is about
-	Description *string `json:"description,omitempty"`
-	// IconClass (optional) a font-awesome icon class to be used when displaying the links in dropdown menus.
-	IconClass *string `json:"icon.class,omitempty"`
-	// Condition (optional) a conditional statement depending on which the deep link shall be rendered
-	Condition *string `json:"if,omitempty"`
-}
-
 const (
 	// settingServerSignatureKey designates the key for a server secret key inside a Kubernetes secret.
 	settingServerSignatureKey = "server.secretkey"
-	// gaTrackingID holds Google Analytics tracking id
-	gaTrackingID = "ga.trackingid"
-	// the URL for getting chat help, this will typically be your Slack channel for support
-	helpChatURL = "help.chatUrl"
-	// the text for getting chat help, defaults to "Chat now!"
-	helpChatText = "help.chatText"
-	// gaAnonymizeUsers specifies if user ids should be anonymized (hashed) before sending to Google Analytics. True unless value is set to 'false'
-	gaAnonymizeUsers = "ga.anonymizeusers"
 	// settingServerCertificate designates the key for the public cert used in TLS
 	settingServerCertificate = "tls.crt"
 	// settingServerPrivateKey designates the key for the private key used in TLS
 	settingServerPrivateKey = "tls.key"
-	// settingURLKey designates the key where Argo CD's external URL is set
-	settingURLKey = "url"
-	// settingAdditionalUrlsKey designates the key where Argo CD's additional external URLs are set
-	settingAdditionalUrlsKey = "additionalUrls"
 	// settingDexConfigKey designates the key for the dex config
 	settingDexConfigKey = "dex.config"
 	// settingsOIDCConfigKey designates the key for OIDC config
 	settingsOIDCConfigKey = "oidc.config"
-	// statusBadgeEnabledKey holds the key which enables of disables status badge feature
-	statusBadgeEnabledKey = "statusbadge.enabled"
-	// statusBadgeRootURLKey holds the key for the root badge URL override
-	statusBadgeRootURLKey = "statusbadge.url"
 	// settingsWebhookGitHubSecret is the key for the GitHub shared webhook secret
 	settingsWebhookGitHubSecretKey = "webhook.github.secret"
 	// settingsWebhookGitLabSecret is the key for the GitLab shared webhook secret
@@ -446,22 +404,10 @@ const (
 	settingsWebhookAzureDevOpsPasswordKey = "webhook.azuredevops.password"
 	// settingsWebhookMaxPayloadSize is the key for the maximum payload size for webhooks in MB
 	settingsWebhookMaxPayloadSizeMB = "webhook.maxPayloadSizeMB"
-	// settingsApplicationInstanceLabelKey is the key to configure injected app instance label key
-	settingsApplicationInstanceLabelKey = "application.instanceLabelKey"
-	// settingsResourceTrackingMethodKey is the key to configure tracking method for application resources
-	settingsResourceTrackingMethodKey = "application.resourceTrackingMethod"
 	// allowedNodeLabelsKey is the key to the list of allowed node labels for the application pod view
 	allowedNodeLabelsKey = "application.allowedNodeLabels"
-	// settingsInstallationID holds the key for the instance installation ID
-	settingsInstallationID = "installationID"
 	// resourcesCustomizationsKey is the key to the map of resource overrides
 	resourceCustomizationsKey = "resource.customizations"
-	// resourceExclusions is the key to the list of excluded resources
-	resourceExclusionsKey = "resource.exclusions"
-	// resourceInclusions is the key to the list of explicitly watched resources
-	resourceInclusionsKey = "resource.inclusions"
-	// resourceIgnoreResourceUpdatesEnabledKey is the key to a boolean determining whether the resourceIgnoreUpdates feature is enabled
-	resourceIgnoreResourceUpdatesEnabledKey = "resource.ignoreResourceUpdatesEnabled"
 	// resourceSensitiveAnnotationsKey is the key to list of annotations to mask in secret resource
 	resourceSensitiveAnnotationsKey = "resource.sensitive.mask.annotations"
 	// resourceCustomLabelKey is the key to a custom label to show in node info, if present
@@ -470,16 +416,7 @@ const (
 	resourceIncludeEventLabelKeys = "resource.includeEventLabelKeys"
 	// resourceExcludeEventLabelKeys is the key to labels to be excluded from adding onto Application's k8s events. Supports wildcard.
 	resourceExcludeEventLabelKeys = "resource.excludeEventLabelKeys"
-	// kustomizeBuildOptionsKey is a string of kustomize build parameters
-	kustomizeBuildOptionsKey = "kustomize.buildOptions"
-	// kustomizeVersionKeyPrefix is a kustomize version key prefix
-	kustomizeVersionKeyPrefix = "kustomize.version"
-	// kustomizePathPrefixKey is a kustomize path for a specific version
-	kustomizePathPrefixKey = "kustomize.path"
-	// anonymousUserEnabledKey is the key which enables or disables anonymous user
-	anonymousUserEnabledKey = "users.anonymous.enabled"
-	// userSessionDurationKey is the key which specifies token expiration duration
-	userSessionDurationKey = "users.session.duration"
+
 	// diffOptions is the key where diff options are configured
 	resourceCompareOptionsKey = "resource.compareoptions"
 	// settingUICSSURLKey designates the key for user-defined CSS URL for UI customization
@@ -488,12 +425,7 @@ const (
 	settingUIBannerContentKey = "ui.bannercontent"
 	// settingUIBannerURLKey designates the key for the link for user-defined info banner for UI
 	settingUIBannerURLKey = "ui.bannerurl"
-	// settingUIBannerPermanentKey designates the key for whether the banner is permanent and not closeable
-	settingUIBannerPermanentKey = "ui.bannerpermanent"
-	// settingUIBannerPositionKey designates the key for the position of the banner
-	settingUIBannerPositionKey = "ui.bannerposition"
-	// settingsBinaryUrlsKey designates the key for the argocd binary URLs
-	settingsBinaryUrlsKey = "help.download"
+
 	// globalProjectsKey designates the key for global project settings
 	globalProjectsKey = "globalProjects"
 	// initialPasswordSecretName is the name of the secret that will hold the initial admin password
@@ -506,31 +438,14 @@ const (
 	externalServerTLSSecretName = "argocd-server-tls"
 	// partOfArgoCDSelector holds label selector that should be applied to config maps and secrets used to manage Argo CD
 	partOfArgoCDSelector = "app.kubernetes.io/part-of=argocd"
-	// settingsPasswordPatternKey is the key to configure user password regular expression
-	settingsPasswordPatternKey = "passwordPattern"
 	// inClusterEnabledKey is the key to configure whether to allow in-cluster server address
 	inClusterEnabledKey = "cluster.inClusterEnabled"
-	// settingsServerRBACEDisableFineGrainedInheritance is the key to configure find-grained RBAC inheritance
-	settingsServerRBACDisableFineGrainedInheritance = "server.rbac.disableApplicationFineGrainedRBACInheritance"
-	// MaxPodLogsToRender the maximum number of pod logs to render
-	settingsMaxPodLogsToRender = "server.maxPodLogsToRender"
-	// helmValuesFileSchemesKey is the key to configure the list of supported helm values file schemas
-	helmValuesFileSchemesKey = "helm.valuesFileSchemes"
-	// execEnabledKey is the key to configure whether the UI exec feature is enabled
-	execEnabledKey = "exec.enabled"
-	// execShellsKey is the key to configure which shells are allowed for `exec` and in what order they are tried
-	execShellsKey = "exec.shells"
-	// oidcTLSInsecureSkipVerifyKey is the key to configure whether TLS cert verification is skipped for OIDC connections
-	oidcTLSInsecureSkipVerifyKey = "oidc.tls.insecure.skip.verify"
 	// ApplicationDeepLinks is the application deep link key
 	ApplicationDeepLinks = "application.links"
 	// ProjectDeepLinks is the project deep link key
 	ProjectDeepLinks = "project.links"
 	// ResourceDeepLinks is the resource deep link key
-	ResourceDeepLinks = "resource.links"
-	extensionConfig   = "extension.config"
-	// RespectRBAC is the key to configure argocd to respect rbac while watching for resources
-	RespectRBAC            = "resource.respectRBAC"
+	ResourceDeepLinks      = "resource.links"
 	RespectRBACValueStrict = "strict"
 	RespectRBACValueNormal = "normal"
 	// impersonationEnabledKey is the key to configure whether the application sync decoupling through impersonation feature is enabled
@@ -545,16 +460,11 @@ const (
 	defaultImpersonationEnabledFlag = false
 )
 
-var sourceTypeToEnableGenerationKey = map[v1alpha1.ApplicationSourceType]string{
-	v1alpha1.ApplicationSourceTypeKustomize: "kustomize.enable",
-	v1alpha1.ApplicationSourceTypeHelm:      "helm.enable",
-	v1alpha1.ApplicationSourceTypeDirectory: "jsonnet.enable",
-}
-
 // SettingsManager holds config info for a new manager with which to access Kubernetes ConfigMaps.
 type SettingsManager struct {
 	ctx             context.Context
 	clientset       kubernetes.Interface
+	appClient       appclientset.Interface
 	secrets         v1listers.SecretLister
 	secretsInformer cache.SharedIndexInformer
 	configmaps      v1listers.ConfigMapLister
@@ -611,17 +521,14 @@ func (mgr *SettingsManager) RespectRBAC() (int, error) {
 	if err != nil {
 		return enginecache.RespectRbacDisabled, err
 	}
-	if cm.Data[RespectRBAC] != "" {
-		switch cm.Data[RespectRBAC] {
-		case RespectRBACValueNormal:
-			return enginecache.RespectRbacNormal, nil
-		case RespectRBACValueStrict:
-			return enginecache.RespectRbacStrict, nil
-		default:
-			return enginecache.RespectRbacDisabled, fmt.Errorf("invalid value for %s: %s", RespectRBAC, cm.Data[RespectRBAC])
-		}
+	switch cm.Spec.Application.RespectRBAC {
+	case RespectRBACValueNormal:
+		return enginecache.RespectRbacNormal, nil
+	case RespectRBACValueStrict:
+		return enginecache.RespectRbacStrict, nil
+	default:
+		return enginecache.RespectRbacDisabled, fmt.Errorf("invalid value for respectRBAC: %s", cm.Spec.Application.RespectRBAC)
 	}
-	return enginecache.RespectRbacDisabled, nil
 }
 
 func (mgr *SettingsManager) GetSecretsLister() (v1listers.SecretLister, error) {
@@ -678,18 +585,17 @@ func (mgr *SettingsManager) updateSecret(callback func(*corev1.Secret) error) er
 	return mgr.ResyncInformers()
 }
 
-func (mgr *SettingsManager) updateConfigMap(callback func(*corev1.ConfigMap) error) error {
+func (mgr *SettingsManager) updateConfigMap(callback func(configuration *v1alpha1.Configuration) error) error {
 	argoCDCM, err := mgr.getConfigMap()
 	createCM := false
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return err
 		}
-		argoCDCM = &corev1.ConfigMap{
+		argoCDCM = &v1alpha1.Configuration{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: common.ArgoCDConfigMapName,
+				Name: "config",
 			},
-			Data: make(map[string]string),
 		}
 		createCM = true
 	}
@@ -699,14 +605,14 @@ func (mgr *SettingsManager) updateConfigMap(callback func(*corev1.ConfigMap) err
 	if err != nil {
 		return err
 	}
-	if !createCM && reflect.DeepEqual(beforeUpdate.Data, argoCDCM.Data) {
+	if !createCM && reflect.DeepEqual(beforeUpdate.Spec, argoCDCM.Spec) {
 		return nil
 	}
 
 	if createCM {
-		_, err = mgr.clientset.CoreV1().ConfigMaps(mgr.namespace).Create(context.Background(), argoCDCM, metav1.CreateOptions{})
+		_, err = mgr.appClient.ArgoprojV1alpha1().Configurations(mgr.namespace).Create(context.Background(), argoCDCM, metav1.CreateOptions{})
 	} else {
-		_, err = mgr.clientset.CoreV1().ConfigMaps(mgr.namespace).Update(context.Background(), argoCDCM, metav1.UpdateOptions{})
+		_, err = mgr.appClient.ArgoprojV1alpha1().Configurations(mgr.namespace).Update(context.Background(), argoCDCM, metav1.UpdateOptions{})
 	}
 
 	if err != nil {
@@ -716,8 +622,8 @@ func (mgr *SettingsManager) updateConfigMap(callback func(*corev1.ConfigMap) err
 	return mgr.ResyncInformers()
 }
 
-func (mgr *SettingsManager) getConfigMap() (*corev1.ConfigMap, error) {
-	return mgr.GetConfigMapByName(common.ArgoCDConfigMapName)
+func (mgr *SettingsManager) getConfigMap() (*v1alpha1.Configuration, error) {
+	return mgr.appClient.ArgoprojV1alpha1().Configurations(mgr.namespace).Get(context.Background(), "config", metav1.GetOptions{})
 }
 
 // Returns the ConfigMap with the given name from the cluster.
@@ -786,25 +692,28 @@ func (mgr *SettingsManager) GetResourcesFilter() (*ResourcesFilter, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving argocd-cm: %w", err)
 	}
-	rf := &ResourcesFilter{}
-	if value, ok := argoCDCM.Data[resourceInclusionsKey]; ok {
-		includedResources := make([]FilteredResource, 0)
-		err := yaml.Unmarshal([]byte(value), &includedResources)
-		if err != nil {
-			return nil, fmt.Errorf("error unmarshalling included resources %w", err)
-		}
-		rf.ResourceInclusions = includedResources
-	}
 
-	if value, ok := argoCDCM.Data[resourceExclusionsKey]; ok {
-		excludedResources := make([]FilteredResource, 0)
-		err := yaml.Unmarshal([]byte(value), &excludedResources)
-		if err != nil {
-			return nil, fmt.Errorf("error unmarshalling excluded resources %w", err)
-		}
-		rf.ResourceExclusions = excludedResources
+	// FIXME: instead of converting the structs, we should use v1alpha1.FilteredResource everywhere
+	var resourceInclusions []FilteredResource
+	for _, r := range argoCDCM.Spec.ResourceCustomizations.Inclusions {
+		resourceInclusions = append(resourceInclusions, FilteredResource{
+			APIGroups: r.Groups,
+			Kinds:     r.Kinds,
+			Clusters:  r.Clusters,
+		})
 	}
-	return rf, nil
+	var resourceExclusions []FilteredResource
+	for _, r := range argoCDCM.Spec.ResourceCustomizations.Exclusions {
+		resourceExclusions = append(resourceExclusions, FilteredResource{
+			APIGroups: r.Groups,
+			Kinds:     r.Kinds,
+			Clusters:  r.Clusters,
+		})
+	}
+	return &ResourcesFilter{
+		ResourceInclusions: resourceInclusions,
+		ResourceExclusions: resourceExclusions,
+	}, nil
 }
 
 func (mgr *SettingsManager) GetAppInstanceLabelKey() (string, error) {
@@ -812,11 +721,7 @@ func (mgr *SettingsManager) GetAppInstanceLabelKey() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	label := argoCDCM.Data[settingsApplicationInstanceLabelKey]
-	if label == "" {
-		return common.LabelKeyAppInstance, nil
-	}
-	return label, nil
+	return argoCDCM.Spec.ResourceTracking.InstanceLabelKey, nil
 }
 
 func (mgr *SettingsManager) GetTrackingMethod() (string, error) {
@@ -824,11 +729,7 @@ func (mgr *SettingsManager) GetTrackingMethod() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	tm := argoCDCM.Data[settingsResourceTrackingMethodKey]
-	if tm == "" {
-		return string(v1alpha1.TrackingMethodAnnotation), nil
-	}
-	return tm, nil
+	return argoCDCM.Spec.ResourceTracking.Method, nil
 }
 
 func (mgr *SettingsManager) GetInstallationID() (string, error) {
@@ -836,7 +737,7 @@ func (mgr *SettingsManager) GetInstallationID() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return argoCDCM.Data[settingsInstallationID], nil
+	return argoCDCM.Spec.InstallationID, nil
 }
 
 func (mgr *SettingsManager) GetPasswordPattern() (string, error) {
@@ -844,11 +745,7 @@ func (mgr *SettingsManager) GetPasswordPattern() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	label := argoCDCM.Data[settingsPasswordPatternKey]
-	if label == "" {
-		return common.PasswordPatten, nil
-	}
-	return label, nil
+	return argoCDCM.Spec.Server.Authentication.PasswordPattern, nil
 }
 
 func (mgr *SettingsManager) ApplicationFineGrainedRBACInheritanceDisabled() (bool, error) {
@@ -856,40 +753,32 @@ func (mgr *SettingsManager) ApplicationFineGrainedRBACInheritanceDisabled() (boo
 	if err != nil {
 		return false, err
 	}
-
-	if argoCDCM.Data[settingsServerRBACDisableFineGrainedInheritance] == "" {
-		return true, nil
-	}
-
-	return strconv.ParseBool(argoCDCM.Data[settingsServerRBACDisableFineGrainedInheritance])
+	return !argoCDCM.Spec.Server.RBAC.FineGrainedInheritance.Enabled, nil
 }
 
 func (mgr *SettingsManager) GetMaxPodLogsToRender() (int64, error) {
 	argoCDCM, err := mgr.getConfigMap()
 	if err != nil {
-		return 10, err
+		return 0, err
 	}
-
-	if argoCDCM.Data[settingsMaxPodLogsToRender] == "" {
-		return 10, nil
-	}
-
-	return strconv.ParseInt(argoCDCM.Data[settingsMaxPodLogsToRender], 10, 64)
+	return argoCDCM.Spec.Server.MaxPodLogsToRender, nil
 }
 
-func (mgr *SettingsManager) GetDeepLinks(deeplinkType string) ([]DeepLink, error) {
+func (mgr *SettingsManager) GetDeepLinks(deeplinkType string) ([]v1alpha1.DeepLink, error) {
 	argoCDCM, err := mgr.getConfigMap()
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving argocd-cm: %w", err)
 	}
-	deepLinks := make([]DeepLink, 0)
-	if value, ok := argoCDCM.Data[deeplinkType]; ok {
-		err := yaml.Unmarshal([]byte(value), &deepLinks)
-		if err != nil {
-			return nil, fmt.Errorf("error unmarshalling deep links %w", err)
-		}
+	switch deeplinkType {
+	case ApplicationDeepLinks:
+		return argoCDCM.Spec.Server.UI.DeepLinks.Application, nil
+	case ProjectDeepLinks:
+		return argoCDCM.Spec.Server.UI.DeepLinks.Project, nil
+	case ResourceDeepLinks:
+		return argoCDCM.Spec.Server.UI.DeepLinks.Resource, nil
+	default:
+		return nil, fmt.Errorf("unknown deeplink type: %s", deeplinkType)
 	}
-	return deepLinks, nil
 }
 
 func (mgr *SettingsManager) GetEnabledSourceTypes() (map[string]bool, error) {
@@ -897,18 +786,12 @@ func (mgr *SettingsManager) GetEnabledSourceTypes() (map[string]bool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get argo-cd config map: %w", err)
 	}
-	res := map[string]bool{}
-	for sourceType := range sourceTypeToEnableGenerationKey {
-		res[string(sourceType)] = true
-	}
-	for sourceType, key := range sourceTypeToEnableGenerationKey {
-		if val, ok := argoCDCM.Data[key]; ok && val != "" {
-			res[string(sourceType)] = val == "true"
-		}
-	}
-	// plugin based manifest generation cannot be disabled
-	res[string(v1alpha1.ApplicationSourceTypePlugin)] = true
-	return res, nil
+	return map[string]bool{
+		string(v1alpha1.ApplicationSourceTypeDirectory): argoCDCM.Spec.Manifests.Jsonnet.Enabled,
+		string(v1alpha1.ApplicationSourceTypeKustomize): argoCDCM.Spec.Manifests.Kustomize.Enabled,
+		string(v1alpha1.ApplicationSourceTypeHelm):      argoCDCM.Spec.Manifests.Helm.Enabled,
+		string(v1alpha1.ApplicationSourceTypePlugin):    true,
+	}, nil
 }
 
 func (mgr *SettingsManager) GetIgnoreResourceUpdatesOverrides() (map[string]v1alpha1.ResourceOverride, error) {
@@ -951,12 +834,7 @@ func (mgr *SettingsManager) GetIsIgnoreResourceUpdatesEnabled() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("error retrieving config map: %w", err)
 	}
-
-	if argoCDCM.Data[resourceIgnoreResourceUpdatesEnabledKey] == "" {
-		return true, nil
-	}
-
-	return strconv.ParseBool(argoCDCM.Data[resourceIgnoreResourceUpdatesEnabledKey])
+	return argoCDCM.Spec.ResourceCustomizations.Ignore.Updates.Enabled, nil
 }
 
 // GetResourceOverrides loads Resource Overrides from argocd-cm ConfigMap
@@ -1137,17 +1015,7 @@ func (mgr *SettingsManager) GetHelmSettings() (*v1alpha1.HelmOptions, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get argo-cd config map: %w", err)
 	}
-	helmOptions := &v1alpha1.HelmOptions{}
-	if value, ok := argoCDCM.Data[helmValuesFileSchemesKey]; ok {
-		for _, item := range strings.Split(value, ",") {
-			if item := strings.TrimSpace(item); item != "" {
-				helmOptions.ValuesFileSchemes = append(helmOptions.ValuesFileSchemes, item)
-			}
-		}
-	} else {
-		helmOptions.ValuesFileSchemes = []string{"https", "http"}
-	}
-	return helmOptions, nil
+	return &argoCDCM.Spec.Manifests.Helm, nil
 }
 
 // GetKustomizeSettings loads the kustomize settings from argocd-cm ConfigMap
@@ -1156,58 +1024,7 @@ func (mgr *SettingsManager) GetKustomizeSettings() (*v1alpha1.KustomizeOptions, 
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving argocd-cm: %w", err)
 	}
-	kustomizeVersionsMap := map[string]v1alpha1.KustomizeVersion{}
-	buildOptions := map[string]string{}
-	settings := &v1alpha1.KustomizeOptions{}
-
-	// extract build options for the default version
-	if options, ok := argoCDCM.Data[kustomizeBuildOptionsKey]; ok {
-		settings.BuildOptions = options
-	}
-
-	// extract per-version binary paths and build options
-	for k, v := range argoCDCM.Data {
-		// extract version and path from kustomize.version.<version>
-		if strings.HasPrefix(k, kustomizeVersionKeyPrefix) {
-			err = addKustomizeVersion(kustomizeVersionKeyPrefix, k, v, kustomizeVersionsMap)
-			if err != nil {
-				return nil, fmt.Errorf("failed to add kustomize version from %q: %w", k, err)
-			}
-		}
-
-		// extract version and path from kustomize.path.<version>
-		if strings.HasPrefix(k, kustomizePathPrefixKey) {
-			err = addKustomizeVersion(kustomizePathPrefixKey, k, v, kustomizeVersionsMap)
-			if err != nil {
-				return nil, fmt.Errorf("failed to add kustomize version from %q: %w", k, err)
-			}
-		}
-
-		// extract version and build options from kustomize.buildOptions.<version>
-		if strings.HasPrefix(k, kustomizeBuildOptionsKey) && k != kustomizeBuildOptionsKey {
-			buildOptions[k[len(kustomizeBuildOptionsKey)+1:]] = v
-		}
-	}
-
-	for _, v := range kustomizeVersionsMap {
-		if _, ok := buildOptions[v.Name]; ok {
-			v.BuildOptions = buildOptions[v.Name]
-		}
-		settings.Versions = append(settings.Versions, v)
-	}
-	return settings, nil
-}
-
-func addKustomizeVersion(prefix, name, path string, kvMap map[string]v1alpha1.KustomizeVersion) error {
-	version := name[len(prefix)+1:]
-	if _, ok := kvMap[version]; ok {
-		return fmt.Errorf("found duplicate kustomize version: %s", version)
-	}
-	kvMap[version] = v1alpha1.KustomizeVersion{
-		Name: version,
-		Path: path,
-	}
-	return nil
+	return &argoCDCM.Spec.Manifests.Kustomize, nil
 }
 
 func (mgr *SettingsManager) GetGoogleAnalytics() (*GoogleAnalytics, error) {
@@ -1216,28 +1033,24 @@ func (mgr *SettingsManager) GetGoogleAnalytics() (*GoogleAnalytics, error) {
 		return nil, fmt.Errorf("error retrieving config map: %w", err)
 	}
 	return &GoogleAnalytics{
-		TrackingID:     argoCDCM.Data[gaTrackingID],
-		AnonymizeUsers: argoCDCM.Data[gaAnonymizeUsers] != "false",
+		TrackingID:     argoCDCM.Spec.Server.UI.Analytics.Google.TrackingId,
+		AnonymizeUsers: argoCDCM.Spec.Server.UI.Analytics.Google.AnonymizeUsers,
 	}, nil
 }
 
-func (mgr *SettingsManager) GetHelp() (*Help, error) {
+func (mgr *SettingsManager) GetHelp() (*v1alpha1.ChatHelp, error) {
 	argoCDCM, err := mgr.getConfigMap()
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving config map: %w", err)
 	}
-	chatText, ok := argoCDCM.Data[helpChatText]
-	if !ok {
-		chatText = "Chat now!"
-	}
-	chatURL, ok := argoCDCM.Data[helpChatURL]
-	if !ok {
+	chatText := argoCDCM.Spec.Server.UI.Help.Chat.Text
+	if argoCDCM.Spec.Server.UI.Help.Chat.Url == "" {
 		chatText = ""
 	}
-	return &Help{
-		ChatURL:    chatURL,
-		ChatText:   chatText,
-		BinaryURLs: getDownloadBinaryUrlsFromConfigMap(argoCDCM),
+	return &v1alpha1.ChatHelp{
+		Url:      argoCDCM.Spec.Server.UI.Help.Chat.Url,
+		Text:     chatText,
+		Download: argoCDCM.Spec.Server.UI.Help.Chat.Download,
 	}, nil
 }
 
@@ -1375,105 +1188,36 @@ func (mgr *SettingsManager) ensureSynced(forceResync bool) error {
 	return mgr.initialize(ctx)
 }
 
-func getDownloadBinaryUrlsFromConfigMap(argoCDCM *corev1.ConfigMap) map[string]string {
-	binaryUrls := map[string]string{}
-	for _, archType := range []string{"darwin-amd64", "darwin-arm64", "windows-amd64", "linux-amd64", "linux-arm64", "linux-ppc64le", "linux-s390x"} {
-		if val, ok := argoCDCM.Data[settingsBinaryUrlsKey+"."+archType]; ok {
-			binaryUrls[archType] = val
-		}
-	}
-	return binaryUrls
-}
-
 // updateSettingsFromConfigMap transfers settings from a Kubernetes configmap into an ArgoCDSettings struct.
-func updateSettingsFromConfigMap(settings *ArgoCDSettings, argoCDCM *corev1.ConfigMap) {
-	settings.DexConfig = argoCDCM.Data[settingDexConfigKey]
-	settings.OIDCConfigRAW = argoCDCM.Data[settingsOIDCConfigKey]
-	settings.KustomizeBuildOptions = argoCDCM.Data[kustomizeBuildOptionsKey]
-	settings.StatusBadgeEnabled = argoCDCM.Data[statusBadgeEnabledKey] == "true"
-	settings.StatusBadgeRootUrl = argoCDCM.Data[statusBadgeRootURLKey]
-	settings.AnonymousUserEnabled = argoCDCM.Data[anonymousUserEnabledKey] == "true"
-	settings.UiCssURL = argoCDCM.Data[settingUICSSURLKey]
-	settings.UiBannerContent = argoCDCM.Data[settingUIBannerContentKey]
-	settings.UiBannerPermanent = argoCDCM.Data[settingUIBannerPermanentKey] == "true"
-	settings.UiBannerPosition = argoCDCM.Data[settingUIBannerPositionKey]
-	settings.BinaryUrls = getDownloadBinaryUrlsFromConfigMap(argoCDCM)
-	if err := validateExternalURL(argoCDCM.Data[settingURLKey]); err != nil {
-		log.Warnf("Failed to validate URL in configmap: %v", err)
-	}
-	settings.URL = argoCDCM.Data[settingURLKey]
-	if err := validateExternalURL(argoCDCM.Data[settingUIBannerURLKey]); err != nil {
-		log.Warnf("Failed to validate UI banner URL in configmap: %v", err)
-	}
-	if argoCDCM.Data[settingAdditionalUrlsKey] != "" {
-		if err := yaml.Unmarshal([]byte(argoCDCM.Data[settingAdditionalUrlsKey]), &settings.AdditionalURLs); err != nil {
-			log.Warnf("Failed to decode all additional URLs in configmap: %v", err)
-		}
-	}
-	for _, url := range settings.AdditionalURLs {
-		if err := validateExternalURL(url); err != nil {
-			log.Warnf("Failed to validate external URL in configmap: %v", err)
-		}
-	}
-	settings.UiBannerURL = argoCDCM.Data[settingUIBannerURLKey]
-	settings.UserSessionDuration = time.Hour * 24
-	if userSessionDurationStr, ok := argoCDCM.Data[userSessionDurationKey]; ok {
-		if val, err := timeutil.ParseDuration(userSessionDurationStr); err != nil {
-			log.Warnf("Failed to parse '%s' key: %v", userSessionDurationKey, err)
-		} else {
-			settings.UserSessionDuration = *val
-		}
-	}
-	settings.PasswordPattern = argoCDCM.Data[settingsPasswordPatternKey]
-	if settings.PasswordPattern == "" {
-		settings.PasswordPattern = common.PasswordPatten
-	}
-	if maxPodLogsToRenderStr, ok := argoCDCM.Data[settingsMaxPodLogsToRender]; ok {
-		if val, err := strconv.ParseInt(maxPodLogsToRenderStr, 10, 64); err != nil {
-			log.Warnf("Failed to parse '%s' key: %v", settingsMaxPodLogsToRender, err)
-		} else {
-			settings.MaxPodLogsToRender = val
-		}
-	}
-	settings.InClusterEnabled = argoCDCM.Data[inClusterEnabledKey] != "false"
-	settings.ExecEnabled = argoCDCM.Data[execEnabledKey] == "true"
-	execShells := argoCDCM.Data[execShellsKey]
-	if execShells != "" {
-		settings.ExecShells = strings.Split(execShells, ",")
-	} else {
-		// Fall back to default. If you change this list, also change docs/operator-manual/argocd-cm.yaml.
-		settings.ExecShells = []string{"bash", "sh", "powershell", "cmd"}
-	}
-	settings.TrackingMethod = argoCDCM.Data[settingsResourceTrackingMethodKey]
-	settings.OIDCTLSInsecureSkipVerify = argoCDCM.Data[oidcTLSInsecureSkipVerifyKey] == "true"
-	settings.ExtensionConfig = getExtensionConfigs(argoCDCM.Data)
-	settings.ImpersonationEnabled = argoCDCM.Data[impersonationEnabledKey] == "true"
-}
-
-func getExtensionConfigs(cmData map[string]string) map[string]string {
-	result := make(map[string]string)
-	for k, v := range cmData {
-		if strings.HasPrefix(k, extensionConfig) {
-			extName := strings.TrimPrefix(strings.TrimPrefix(k, extensionConfig), ".")
-			result[extName] = v
-		}
-	}
-	return result
-}
-
-// validateExternalURL ensures the external URL that is set on the configmap is valid
-func validateExternalURL(u string) error {
-	if u == "" {
-		return nil
-	}
-	URL, err := url.Parse(u)
+func updateSettingsFromConfigMap(settings *ArgoCDSettings, argoCDCM *v1alpha1.Configuration) {
+	dexConfig, err := yaml.Marshal(argoCDCM.Spec.Server.Authentication.Dex)
 	if err != nil {
-		return fmt.Errorf("failed to parse URL: %w", err)
+		log.Warnf("Could not parse Dex config, using an empty config instead: %v", err)
 	}
-	if URL.Scheme != "http" && URL.Scheme != "https" {
-		return errors.New("URL must include http or https protocol")
-	}
-	return nil
+	settings.DexConfig = string(dexConfig)
+	settings.OIDCConfigRAW = argoCDCM.Spec.Server.Authentication.OIDC
+	settings.KustomizeBuildOptions = argoCDCM.Spec.Manifests.Kustomize.BuildOptions
+	settings.StatusBadgeEnabled = argoCDCM.Spec.Server.UI.StatusBadge.Enabled
+	settings.StatusBadgeRootUrl = argoCDCM.Spec.Server.UI.StatusBadge.Url
+	settings.AnonymousUserEnabled = argoCDCM.Spec.Server.Authentication.AnonymousUsersEnabled
+	settings.UiCssURL = argoCDCM.Spec.Server.UI.CssUrl
+	settings.UiBannerContent = argoCDCM.Spec.Server.UI.Banner.Content
+	settings.UiBannerPermanent = argoCDCM.Spec.Server.UI.Banner.Permanent
+	settings.UiBannerPosition = argoCDCM.Spec.Server.UI.Banner.Position
+	settings.URL = argoCDCM.Spec.Server.URL
+	settings.AdditionalURLs = argoCDCM.Spec.Server.AdditionalUrls
+	settings.UiBannerURL = argoCDCM.Spec.Server.UI.Banner.Url
+	settings.UserSessionDuration = argoCDCM.Spec.Server.Authentication.SessionDuration.Duration
+	settings.PasswordPattern = argoCDCM.Spec.Server.Authentication.PasswordPattern
+	settings.MaxPodLogsToRender = argoCDCM.Spec.Server.MaxPodLogsToRender
+	settings.InClusterEnabled = argoCDCM.Spec.Application.InClusterEnabled
+	settings.ExecEnabled = argoCDCM.Spec.Server.Exec.Enabled
+	settings.ExecShells = argoCDCM.Spec.Server.Exec.Shells
+	settings.TrackingMethod = argoCDCM.Spec.ResourceTracking.Method
+	// FIXME: add a field for this in v1alpha1.Configuration
+	// settings.OIDCTLSInsecureSkipVerify = argoCDCM.Spec.Server.Authentication.OIDC.
+	settings.ExtensionConfig = argoCDCM.Spec.Server.Extensions
+	settings.ImpersonationEnabled = argoCDCM.Spec.Application.Sync.Impersonation.Enabled
 }
 
 // updateSettingsFromSecret transfers settings from a Kubernetes secret into an ArgoCDSettings struct.
@@ -1578,12 +1322,8 @@ func (mgr *SettingsManager) loadTLSCertificateFromSecret(secret *corev1.Secret) 
 
 // SaveSettings serializes ArgoCDSettings and upserts it into K8s secret/configmap
 func (mgr *SettingsManager) SaveSettings(settings *ArgoCDSettings) error {
-	err := mgr.updateConfigMap(func(argoCDCM *corev1.ConfigMap) error {
-		if settings.URL != "" {
-			argoCDCM.Data[settingURLKey] = settings.URL
-		} else {
-			delete(argoCDCM.Data, settingURLKey)
-		}
+	err := mgr.updateConfigMap(func(argoCDCM *v1alpha1.Configuration) error {
+		argoCDCM.Spec.Server.URL = settings.URL
 		if settings.DexConfig != "" {
 			argoCDCM.Data[settingDexConfigKey] = settings.DexConfig
 		} else {

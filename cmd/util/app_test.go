@@ -500,14 +500,14 @@ func TestFilterResources(t *testing.T) {
 	t.Run("Filter by ns", func(t *testing.T) {
 		resources := []*v1alpha1.ResourceDiff{
 			{
-				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"Service\",\"metadata\":{\"name\":\"test-helm-guestbook\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
+				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"ExtensionService\",\"metadata\":{\"name\":\"test-helm-guestbook\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
 			},
 			{
-				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"Service\",\"metadata\":{\"name\":\"test-helm-guestbook\",\"namespace\":\"ns\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
+				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"ExtensionService\",\"metadata\":{\"name\":\"test-helm-guestbook\",\"namespace\":\"ns\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
 			},
 		}
 
-		filteredResources, err := FilterResources(false, resources, "g", "Service", "ns", "test-helm-guestbook", true)
+		filteredResources, err := FilterResources(false, resources, "g", "ExtensionService", "ns", "test-helm-guestbook", true)
 		require.NoError(t, err)
 		assert.Len(t, filteredResources, 1)
 	})
@@ -515,7 +515,7 @@ func TestFilterResources(t *testing.T) {
 	t.Run("Filter by kind", func(t *testing.T) {
 		resources := []*v1alpha1.ResourceDiff{
 			{
-				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"Service\",\"metadata\":{\"name\":\"test-helm-guestbook\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
+				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"ExtensionService\",\"metadata\":{\"name\":\"test-helm-guestbook\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
 			},
 			{
 				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"Deployment\",\"metadata\":{\"name\":\"test-helm-guestbook\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
@@ -530,14 +530,14 @@ func TestFilterResources(t *testing.T) {
 	t.Run("Filter by name", func(t *testing.T) {
 		resources := []*v1alpha1.ResourceDiff{
 			{
-				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"Service\",\"metadata\":{\"name\":\"test-helm-guestbook\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
+				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"ExtensionService\",\"metadata\":{\"name\":\"test-helm-guestbook\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
 			},
 			{
-				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"Service\",\"metadata\":{\"name\":\"test-helm\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
+				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"ExtensionService\",\"metadata\":{\"name\":\"test-helm\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
 			},
 		}
 
-		filteredResources, err := FilterResources(false, resources, "g", "Service", "argocd", "test-helm", true)
+		filteredResources, err := FilterResources(false, resources, "g", "ExtensionService", "argocd", "test-helm", true)
 		require.NoError(t, err)
 		assert.Len(t, filteredResources, 1)
 	})
@@ -545,14 +545,14 @@ func TestFilterResources(t *testing.T) {
 	t.Run("Filter no result", func(t *testing.T) {
 		resources := []*v1alpha1.ResourceDiff{
 			{
-				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"Service\",\"metadata\":{\"name\":\"test-helm-guestbook\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
+				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"ExtensionService\",\"metadata\":{\"name\":\"test-helm-guestbook\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
 			},
 			{
-				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"Service\",\"metadata\":{\"name\":\"test-helm\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
+				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"ExtensionService\",\"metadata\":{\"name\":\"test-helm\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
 			},
 		}
 
-		filteredResources, err := FilterResources(false, resources, "g", "Service", "argocd-unknown", "test-helm", true)
+		filteredResources, err := FilterResources(false, resources, "g", "ExtensionService", "argocd-unknown", "test-helm", true)
 		require.ErrorContains(t, err, "no matching resource found")
 		assert.Nil(t, filteredResources)
 	})
@@ -560,14 +560,14 @@ func TestFilterResources(t *testing.T) {
 	t.Run("Filter multiple results", func(t *testing.T) {
 		resources := []*v1alpha1.ResourceDiff{
 			{
-				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"Service\",\"metadata\":{\"name\":\"test-helm\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
+				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"ExtensionService\",\"metadata\":{\"name\":\"test-helm\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
 			},
 			{
-				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"Service\",\"metadata\":{\"name\":\"test-helm\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
+				LiveState: "{\"apiVersion\":\"v1\",\"kind\":\"ExtensionService\",\"metadata\":{\"name\":\"test-helm\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
 			},
 		}
 
-		filteredResources, err := FilterResources(false, resources, "g", "Service", "argocd", "test-helm", false)
+		filteredResources, err := FilterResources(false, resources, "g", "ExtensionService", "argocd", "test-helm", false)
 		require.ErrorContains(t, err, "use the --all flag")
 		assert.Nil(t, filteredResources)
 	})

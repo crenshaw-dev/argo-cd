@@ -257,7 +257,7 @@ func buildArgoCDClusterSecret(secretName, secretNamespace, clusterName, clusterS
 
 // createNamespaceScopedUser
 // - username = name of Namespace the simulated user is able to deploy to
-// - clusterScopedSecrets = whether the Service Account is namespace-scoped or cluster-scoped.
+// - clusterScopedSecrets = whether the ExtensionService Account is namespace-scoped or cluster-scoped.
 func createNamespaceScopedUser(t *testing.T, username string, clusterScopedSecrets bool) {
 	t.Helper()
 	// Create a new Namespace for our simulated user

@@ -1979,11 +1979,11 @@ func NewApplicationWaitCommand(clientOpts *argocdclient.ClientOptions) *cobra.Co
 
   # Wait for apps by resource
   # Resource should be formatted as GROUP:KIND:NAME. If no GROUP is specified then :KIND:NAME.
-  argocd app wait my-app --resource :Service:my-service
+  argocd app wait my-app --resource :ExtensionService:my-service
   argocd app wait my-app --resource argoproj.io:Rollout:my-rollout
   argocd app wait my-app --resource '!apps:Deployment:my-service'
-  argocd app wait my-app --resource apps:Deployment:my-service --resource :Service:my-service
-  argocd app wait my-app --resource '!*:Service:*'
+  argocd app wait my-app --resource apps:Deployment:my-service --resource :ExtensionService:my-service
+  argocd app wait my-app --resource '!*:ExtensionService:*'
   # Specify namespace if the application has resources with the same name in different namespaces
   argocd app wait my-app --resource argoproj.io:Rollout:my-namespace/my-rollout
 
@@ -2120,11 +2120,11 @@ func NewApplicationSyncCommand(clientOpts *argocdclient.ClientOptions) *cobra.Co
 
   # Sync a specific resource
   # Resource should be formatted as GROUP:KIND:NAME. If no GROUP is specified then :KIND:NAME
-  argocd app sync my-app --resource :Service:my-service
+  argocd app sync my-app --resource :ExtensionService:my-service
   argocd app sync my-app --resource argoproj.io:Rollout:my-rollout
   argocd app sync my-app --resource '!apps:Deployment:my-service'
-  argocd app sync my-app --resource apps:Deployment:my-service --resource :Service:my-service
-  argocd app sync my-app --resource '!*:Service:*'
+  argocd app sync my-app --resource apps:Deployment:my-service --resource :ExtensionService:my-service
+  argocd app sync my-app --resource '!*:ExtensionService:*'
   # Specify namespace if the application has resources with the same name in different namespaces
   argocd app sync my-app --resource argoproj.io:Rollout:my-namespace/my-rollout`,
 		Run: func(c *cobra.Command, args []string) {

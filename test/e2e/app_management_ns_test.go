@@ -149,7 +149,7 @@ func TestNamespacedGetLogsAllowNS(t *testing.T) {
 			assert.Contains(t, out, "Hi")
 		}).
 		And(func(_ *Application) {
-			out, err := fixture.RunCliWithRetry(5, "app", "logs", ctx.AppQualifiedName(), "--kind", "Service")
+			out, err := fixture.RunCliWithRetry(5, "app", "logs", ctx.AppQualifiedName(), "--kind", "ExtensionService")
 			require.NoError(t, err)
 			assert.NotContains(t, out, "Hi")
 		})
@@ -303,7 +303,7 @@ func TestNamespacedDeleteAppResource(t *testing.T) {
 		Expect(SyncStatusIs(SyncStatusCodeSynced)).
 		And(func(_ *Application) {
 			// app should be listed
-			if _, err := fixture.RunCli("app", "delete-resource", ctx.AppQualifiedName(), "--kind", "Service", "--resource-name", "guestbook-ui"); err != nil {
+			if _, err := fixture.RunCli("app", "delete-resource", ctx.AppQualifiedName(), "--kind", "ExtensionService", "--resource-name", "guestbook-ui"); err != nil {
 				require.NoError(t, err)
 			}
 		}).
@@ -433,7 +433,7 @@ func TestNamespacedTrackAppStateAndSyncApp(t *testing.T) {
 		Expect(OperationPhaseIs(OperationSucceeded)).
 		Expect(SyncStatusIs(SyncStatusCodeSynced)).
 		Expect(HealthIs(health.HealthStatusHealthy)).
-		Expect(Success(fmt.Sprintf("Service     %s  guestbook-ui  Synced ", fixture.DeploymentNamespace()))).
+		Expect(Success(fmt.Sprintf("ExtensionService     %s  guestbook-ui  Synced ", fixture.DeploymentNamespace()))).
 		Expect(Success(fmt.Sprintf("apps   Deployment  %s  guestbook-ui  Synced", fixture.DeploymentNamespace()))).
 		Expect(NamespacedEvent(fixture.AppNamespace(), EventReasonResourceUpdated, "sync")).
 		And(func(app *Application) {
@@ -1544,7 +1544,7 @@ func TestNamespacedNotPermittedResources(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "guestbook-ui",
 			Annotations: map[string]string{
-				common.AnnotationKeyAppInstance: fmt.Sprintf("%s_%s:Service:%s/guesbook-ui", fixture.TestNamespace(), ctx.AppQualifiedName(), fixture.DeploymentNamespace()),
+				common.AnnotationKeyAppInstance: fmt.Sprintf("%s_%s:ExtensionService:%s/guesbook-ui", fixture.TestNamespace(), ctx.AppQualifiedName(), fixture.DeploymentNamespace()),
 			},
 		},
 		Spec: corev1.ServiceSpec{
@@ -1563,7 +1563,7 @@ func TestNamespacedNotPermittedResources(t *testing.T) {
 		Destinations:     []ApplicationDestination{{Namespace: fixture.DeploymentNamespace(), Server: "*"}},
 		SourceNamespaces: []string{fixture.AppNamespace()},
 		NamespaceResourceBlacklist: []metav1.GroupKind{
-			{Group: "", Kind: "Service"},
+			{Group: "", Kind: "ExtensionService"},
 		},
 	}).
 		And(func() {
@@ -1583,7 +1583,7 @@ func TestNamespacedNotPermittedResources(t *testing.T) {
 			_, hasIngress := statusByKind[kube.IngressKind]
 			assert.False(t, hasIngress, "Ingress is prohibited not managed object and should be even visible to user")
 			serviceStatus := statusByKind[kube.ServiceKind]
-			assert.Equal(t, SyncStatusCodeUnknown, serviceStatus.Status, "Service is prohibited managed resource so should be set to Unknown")
+			assert.Equal(t, SyncStatusCodeUnknown, serviceStatus.Status, "ExtensionService is prohibited managed resource so should be set to Unknown")
 			deploymentStatus := statusByKind[kube.DeploymentKind]
 			assert.Equal(t, SyncStatusCodeOutOfSync, deploymentStatus.Status)
 		}).
@@ -2248,7 +2248,7 @@ func TestNamespacedAppLogs(t *testing.T) {
 			assert.Contains(t, out, "Hi")
 		}).
 		And(func(app *Application) {
-			out, err := fixture.RunCliWithRetry(5, "app", "logs", app.QualifiedName(), "--kind", "Service")
+			out, err := fixture.RunCliWithRetry(5, "app", "logs", app.QualifiedName(), "--kind", "ExtensionService")
 			require.NoError(t, err)
 			assert.NotContains(t, out, "Hi")
 		})

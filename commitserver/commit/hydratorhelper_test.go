@@ -57,7 +57,7 @@ func TestWriteForPaths(t *testing.T) {
 		{
 			Path: "path2",
 			Manifests: []*apiclient.HydratedManifestDetails{
-				{ManifestJSON: `{"kind":"Service","apiVersion":"v1"}`},
+				{ManifestJSON: `{"kind":"ExtensionService","apiVersion":"v1"}`},
 			},
 			Commands: []string{"command3"},
 		},

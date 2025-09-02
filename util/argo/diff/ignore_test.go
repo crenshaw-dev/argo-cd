@@ -172,7 +172,7 @@ func TestIgnoreDiffConfig_HasIgnoreDifference(t *testing.T) {
 		ignoreConfig := diff.NewIgnoreDiffConfig(ignoreDiffs, nil)
 
 		// when
-		ok, actual := ignoreConfig.HasIgnoreDifference("apps", "Service", "app-name", "default")
+		ok, actual := ignoreConfig.HasIgnoreDifference("apps", "ExtensionService", "app-name", "default")
 
 		// then
 		assert.False(t, ok)

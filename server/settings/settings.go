@@ -63,6 +63,10 @@ func (s *Server) Get(ctx context.Context, _ *settingspkg.SettingsQuery) (*settin
 	if err != nil {
 		return nil, err
 	}
+	binaryUrls := make(map[string]string)
+	for _, v := range help.Download {
+		binaryUrls[v.Architecture] = v.Path
+	}
 	userLoginsDisabled := true
 	accounts, err := s.mgr.GetAccounts()
 	if err != nil {
@@ -104,9 +108,9 @@ func (s *Server) Get(ctx context.Context, _ *settingspkg.SettingsQuery) (*settin
 			AnonymizeUsers: gaSettings.AnonymizeUsers,
 		},
 		Help: &settingspkg.Help{
-			ChatUrl:    help.ChatURL,
-			ChatText:   help.ChatText,
-			BinaryUrls: help.BinaryURLs,
+			ChatUrl:    help.Url,
+			ChatText:   help.Text,
+			BinaryUrls: binaryUrls,
 		},
 		UserLoginsDisabled:        userLoginsDisabled,
 		KustomizeVersions:         kustomizeVersions,

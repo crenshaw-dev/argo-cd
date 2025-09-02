@@ -30,10 +30,6 @@ import (
 
 const (
 	URLPrefix                    = "/extensions"
-	DefaultConnectionTimeout     = 2 * time.Second
-	DefaultKeepAlive             = 15 * time.Second
-	DefaultIdleConnectionTimeout = 60 * time.Second
-	DefaultMaxIdleConnections    = 30
 
 	// HeaderArgoCDNamespace defines the namespace of the
 	// argo control plane to be passed to the extension handler.
@@ -138,96 +134,6 @@ func getAppName(appHeader string) (string, string, error) {
 		return "", "", fmt.Errorf("invalid value for %q header: expected format: <namespace>:<app-name>", HeaderArgoCDApplicationName)
 	}
 	return parts[0], parts[1], nil
-}
-
-// ExtensionConfigs defines the configurations for all extensions
-// retrieved from Argo CD configmap (argocd-cm).
-type ExtensionConfigs struct {
-	Extensions []ExtensionConfig `yaml:"extensions"`
-}
-
-// ExtensionConfig defines the configuration for one extension.
-type ExtensionConfig struct {
-	// Name defines the endpoint that will be used to register
-	// the extension route. Mandatory field.
-	Name    string        `yaml:"name"`
-	Backend BackendConfig `yaml:"backend"`
-}
-
-// BackendConfig defines the backend service configurations that will
-// be used by an specific extension. An extension can have multiple services
-// associated. This is necessary when Argo CD is managing applications in
-// external clusters. In this case, each cluster may have its own backend
-// service.
-type BackendConfig struct {
-	ProxyConfig
-	Services []ServiceConfig `yaml:"services"`
-}
-
-// ServiceConfig provides the configuration for a backend service.
-type ServiceConfig struct {
-	// URL is the address where the extension backend must be available.
-	// Mandatory field.
-	URL string `yaml:"url"`
-
-	// Cluster if provided, will have to match the application
-	// destination name to have requests properly forwarded to this
-	// service URL.
-	Cluster *ClusterConfig `yaml:"cluster,omitempty"`
-
-	// Headers if provided, the headers list will be added on all
-	// outgoing requests for this service config.
-	Headers []Header `yaml:"headers"`
-}
-
-// Header defines the header to be added in the proxy requests.
-type Header struct {
-	// Name defines the name of the header. It is a mandatory field if
-	// a header is provided.
-	Name string `yaml:"name"`
-	// Value defines the value of the header. The actual value can be
-	// provided as verbatim or as a reference to an Argo CD secret key.
-	// In order to provide it as a reference, it is necessary to prefix
-	// it with a dollar sign.
-	// Example:
-	//   value: '$some.argocd.secret.key'
-	// In the example above, the value will be replaced with the one from
-	// the argocd-secret with key 'some.argocd.secret.key'.
-	Value string `yaml:"value"`
-}
-
-type ClusterConfig struct {
-	// Server specifies the URL of the target cluster's Kubernetes control plane API. This must be set if Name is not set.
-	Server string `yaml:"server"`
-
-	// Name is an alternate way of specifying the target cluster by its symbolic name. This must be set if Server is not set.
-	Name string `yaml:"name"`
-}
-
-// ProxyConfig allows configuring connection behaviour between Argo CD
-// API Server and the backend service.
-type ProxyConfig struct {
-	// ConnectionTimeout is the maximum amount of time a dial to
-	// the extension server will wait for a connect to complete.
-	// Default: 2 seconds
-	ConnectionTimeout time.Duration `yaml:"connectionTimeout"`
-
-	// KeepAlive specifies the interval between keep-alive probes
-	// for an active network connection between the API server and
-	// the extension server.
-	// Default: 15 seconds
-	KeepAlive time.Duration `yaml:"keepAlive"`
-
-	// IdleConnectionTimeout is the maximum amount of time an idle
-	// (keep-alive) connection between the API server and the extension
-	// server will remain idle before closing itself.
-	// Default: 60 seconds
-	IdleConnectionTimeout time.Duration `yaml:"idleConnectionTimeout"`
-
-	// MaxIdleConnections controls the maximum number of idle (keep-alive)
-	// connections between the API server and the extension server.
-	// Default: 30
-	MaxIdleConnections int `yaml:"maxIdleConnections"`
 }
 
 // SettingsGetter defines the contract to retrieve Argo CD Settings.
@@ -416,57 +322,41 @@ func proxyKey(extName, cName, cServer string) ProxyKey {
 	}
 }
 
-func parseAndValidateConfig(s *settings.ArgoCDSettings) (*ExtensionConfigs, error) {
+func parseAndValidateConfig(s *settings.ArgoCDSettings) ([]v1alpha1.Extension, error) {
 	if len(s.ExtensionConfig) == 0 {
 		return nil, errors.New("no extensions configurations found")
 	}
 
-	configs := ExtensionConfigs{}
-	for extName, extConfig := range s.ExtensionConfig {
-		extConfigMap := map[string]any{}
-		err := yaml.Unmarshal([]byte(extConfig), &extConfigMap)
-		if err != nil {
-			return nil, fmt.Errorf("invalid extension config: %w", err)
-		}
-
-		parsedExtConfig := settings.ReplaceMapSecrets(extConfigMap, s.Secrets)
-		parsedExtConfigBytes, err := yaml.Marshal(parsedExtConfig)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling parsed extension config: %w", err)
-		}
-		// empty extName means that this is the main configuration defined by
-		// the 'extension.config' configmap key
-		if extName == "" {
-			mainConfig := ExtensionConfigs{}
-			err = yaml.Unmarshal(parsedExtConfigBytes, &mainConfig)
-			if err != nil {
-				return nil, fmt.Errorf("invalid parsed extension config: %w", err)
-			}
-			configs.Extensions = append(configs.Extensions, mainConfig.Extensions...)
-		} else {
-			backendConfig := BackendConfig{}
-			err = yaml.Unmarshal(parsedExtConfigBytes, &backendConfig)
-			if err != nil {
-				return nil, fmt.Errorf("invalid parsed backend extension config for extension %s: %w", extName, err)
-			}
-			ext := ExtensionConfig{
-				Name:    extName,
-				Backend: backendConfig,
-			}
-			configs.Extensions = append(configs.Extensions, ext)
-		}
+	extConfigsAsYaml, err := yaml.Marshal(s.ExtensionConfig)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling extension configs: %w", err)
 	}
-	err := validateConfigs(&configs)
+	extConfigsUnstructured := map[string]any{}
+	err = yaml.Unmarshal(extConfigsAsYaml, &extConfigsUnstructured)
+	if err != nil {
+		return nil, fmt.Errorf("invalid extension configs: %w", err)
+	}
+	settings.ReplaceMapSecrets(extConfigsUnstructured, s.Secrets)
+	extConfigsBytes, err := yaml.Marshal(extConfigsUnstructured)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling parsed extension configs: %w", err)
+	}
+	var extensions []v1alpha1.Extension
+	err = yaml.Unmarshal(extConfigsBytes, &extensions)
+	if err != nil {
+		return nil, fmt.Errorf("invalid parsed extension configs: %w", err)
+	}
+	err = validateConfigs(extensions)
 	if err != nil {
 		return nil, fmt.Errorf("validation error: %w", err)
 	}
-	return &configs, nil
+	return extensions, nil
 }
 
-func validateConfigs(configs *ExtensionConfigs) error {
+func validateConfigs(extensions []v1alpha1.Extension) error {
 	nameSafeRegex := regexp.MustCompile(`^[A-Za-z0-9-_]+$`)
 	exts := make(map[string]struct{})
-	for _, ext := range configs.Extensions {
+	for _, ext := range extensions {
 		if ext.Name == "" {
 			return errors.New("extensions.name must be configured")
 		}
@@ -482,7 +372,7 @@ func validateConfigs(configs *ExtensionConfigs) error {
 			return fmt.Errorf("no backend service configured for extension %s", ext.Name)
 		}
 		for _, svc := range ext.Backend.Services {
-			if svc.URL == "" {
+			if svc.Url == "" {
 				return errors.New("extensions.backend.services.url must be configured")
 			}
 			if svcTotal > 1 && svc.Cluster == nil {
@@ -511,7 +401,7 @@ func validateConfigs(configs *ExtensionConfigs) error {
 // NewProxy will instantiate a new reverse proxy based on the provided
 // targetURL and config. It will remove sensitive information from the
 // incoming request such as the Authorization and Cookie headers.
-func NewProxy(targetURL string, headers []Header, config ProxyConfig) (*httputil.ReverseProxy, error) {
+func NewProxy(targetURL string, headers []v1alpha1.Header, config v1alpha1.Backend) (*httputil.ReverseProxy, error) {
 	url, err := url.Parse(targetURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse proxy URL: %w", err)
@@ -535,32 +425,16 @@ func NewProxy(targetURL string, headers []Header, config ProxyConfig) (*httputil
 
 // newTransport will build a new transport to be used in the proxy
 // applying default values if not defined in the given config.
-func newTransport(config ProxyConfig) *http.Transport {
-	applyProxyConfigDefaults(&config)
+func newTransport(config v1alpha1.Backend) *http.Transport {
 	return &http.Transport{
 		DialContext: (&net.Dialer{
-			Timeout:   config.ConnectionTimeout,
-			KeepAlive: config.KeepAlive,
+			Timeout:   config.ConnectionTimeout.Duration,
+			KeepAlive: config.KeepAlive.Duration,
 		}).DialContext,
-		MaxIdleConns:          config.MaxIdleConnections,
-		IdleConnTimeout:       config.IdleConnectionTimeout,
+		MaxIdleConns:          int(config.MaxIdleConnections),
+		IdleConnTimeout:       config.IdleConnectionTimeout.Duration,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
-	}
-}
-
-func applyProxyConfigDefaults(c *ProxyConfig) {
-	if c.ConnectionTimeout == 0 {
-		c.ConnectionTimeout = DefaultConnectionTimeout
-	}
-	if c.KeepAlive == 0 {
-		c.KeepAlive = DefaultKeepAlive
-	}
-	if c.IdleConnectionTimeout == 0 {
-		c.IdleConnectionTimeout = DefaultIdleConnectionTimeout
-	}
-	if c.MaxIdleConnections == 0 {
-		c.MaxIdleConnections = DefaultMaxIdleConnections
 	}
 }
 
@@ -587,16 +461,16 @@ func (m *Manager) RegisterExtensions() error {
 // iterate over the given configurations building a new extension registry.
 // At the end, it will update the manager with the newly created registry.
 func (m *Manager) UpdateExtensionRegistry(s *settings.ArgoCDSettings) error {
-	extConfigs, err := parseAndValidateConfig(s)
+	extensions, err := parseAndValidateConfig(s)
 	if err != nil {
 		return fmt.Errorf("error parsing extension config: %w", err)
 	}
 	extReg := make(map[string]ProxyRegistry)
-	for _, ext := range extConfigs.Extensions {
+	for _, ext := range extensions {
 		proxyReg := NewProxyRegistry()
 		singleBackend := len(ext.Backend.Services) == 1
 		for _, service := range ext.Backend.Services {
-			proxy, err := NewProxy(service.URL, service.Headers, ext.Backend.ProxyConfig)
+			proxy, err := NewProxy(service.Url, service.Headers, ext.Backend)
 			if err != nil {
 				return fmt.Errorf("error creating proxy: %w", err)
 			}
@@ -616,7 +490,7 @@ func (m *Manager) UpdateExtensionRegistry(s *settings.ArgoCDSettings) error {
 // be unique in the map. If the map already has the key and error is returned.
 func appendProxy(registry ProxyRegistry,
 	extName string,
-	service ServiceConfig,
+	service v1alpha1.ExtensionService,
 	proxy *httputil.ReverseProxy,
 	singleBackend bool,
 ) error {

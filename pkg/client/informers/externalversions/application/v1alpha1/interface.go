@@ -14,6 +14,8 @@ type Interface interface {
 	Applications() ApplicationInformer
 	// ApplicationSets returns a ApplicationSetInformer.
 	ApplicationSets() ApplicationSetInformer
+	// Configurations returns a ConfigurationInformer.
+	Configurations() ConfigurationInformer
 }
 
 type version struct {
@@ -40,4 +42,9 @@ func (v *version) Applications() ApplicationInformer {
 // ApplicationSets returns a ApplicationSetInformer.
 func (v *version) ApplicationSets() ApplicationSetInformer {
 	return &applicationSetInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// Configurations returns a ConfigurationInformer.
+func (v *version) Configurations() ConfigurationInformer {
+	return &configurationInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

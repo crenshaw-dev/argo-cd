@@ -1,0 +1,990 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app.kubernetes.io/name: configurations.argoproj.io
+    app.kubernetes.io/part-of: argocd
+  name: configurations.argoproj.io
+spec:
+  group: argoproj.io
+  names:
+    kind: Configuration
+    listKind: ConfigurationList
+    plural: configurations
+    shortNames:
+    - config
+    - configs
+    singular: configuration
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Configuration is the Schema for the configurations API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ConfigurationSpec defines the desired state of Configuration.
+            properties:
+              application:
+                description: ApplicationConfig configures application-level settings
+                  for reconciliation, sync, RBAC, events, and cluster options.
+                properties:
+                  events:
+                    description: Events configures which metadata.label keys to include
+                      or exclude in Kubernetes events generated for Applications.
+                    properties:
+                      labels:
+                        description: Labels configures which metadata.label keys to
+                          include or exclude in events.
+                        properties:
+                          exclude:
+                            description: Exclude is a list of metadata.label keys
+                              to exclude from events. Supports wildcards.
+                            items:
+                              type: string
+                            type: array
+                          include:
+                            description: Include is a list of metadata.label keys
+                              to include in events. Supports wildcards.
+                            items:
+                              type: string
+                            type: array
+                        required:
+                        - exclude
+                        - include
+                        type: object
+                    required:
+                    - labels
+                    type: object
+                  inClusterEnabled:
+                    default: true
+                    description: InClusterEnabled indicates whether to allow in-cluster
+                      server address. Enabled by default.
+                    type: boolean
+                  reconciliation:
+                    description: Reconciliation configures the reconciliation timeout
+                      and jitter for applications.
+                    properties:
+                      jitter:
+                        description: Jitter is the maximum duration added to the sync
+                          timeout to spread out refreshes. Disabled if set to 0.
+                        type: string
+                      timeout:
+                        description: Timeout is the amount of time before ArgoCD tries
+                          to discover new manifest versions. Disabled if set to 0.
+                        type: string
+                    required:
+                    - jitter
+                    - timeout
+                    type: object
+                  respectRBAC:
+                    default: disabled
+                    description: |-
+                      RespectRBAC instructs controller to only watch for resources it has permissions to list. Can be "disabled", "normal", or "strict".
+                      Disabled by default.
+                    enum:
+                    - disabled
+                    - normal
+                    - strict
+                    type: string
+                  sync:
+                    description: Sync configures application sync options, including
+                      impersonation.
+                    properties:
+                      impersonation:
+                        description: Impersonation enables application sync to use
+                          a custom service account via impersonation.
+                        properties:
+                          enabled:
+                            description: Enabled enables application sync impersonation.
+                            type: boolean
+                        required:
+                        - enabled
+                        type: object
+                    required:
+                    - impersonation
+                    type: object
+                required:
+                - events
+                - inClusterEnabled
+                - reconciliation
+                - respectRBAC
+                - sync
+                type: object
+              globalProjects:
+                items:
+                  properties:
+                    labelSelector:
+                      description: |-
+                        A label selector is a label query over a set of resources. The result of matchLabels and
+                        matchExpressions are ANDed. An empty label selector matches all objects. A null
+                        label selector matches no objects.
+                      properties:
+                        matchExpressions:
+                          description: matchExpressions is a list of label selector
+                            requirements. The requirements are ANDed.
+                          items:
+                            description: |-
+                              A label selector requirement is a selector that contains values, a key, and an operator that
+                              relates the key and values.
+                            properties:
+                              key:
+                                description: key is the label key that the selector
+                                  applies to.
+                                type: string
+                              operator:
+                                description: |-
+                                  operator represents a key's relationship to a set of values.
+                                  Valid operators are In, NotIn, Exists and DoesNotExist.
+                                type: string
+                              values:
+                                description: |-
+                                  values is an array of string values. If the operator is In or NotIn,
+                                  the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                  the values array must be empty. This array is replaced during a strategic
+                                  merge patch.
+                                items:
+                                  type: string
+                                type: array
+                                x-kubernetes-list-type: atomic
+                            required:
+                            - key
+                            - operator
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
+                        matchLabels:
+                          additionalProperties:
+                            type: string
+                          description: |-
+                            matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                            map is equivalent to an element of matchExpressions, whose key field is "key", the
+                            operator is "In", and the values array contains only "value". The requirements are ANDed.
+                          type: object
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    projectName:
+                      type: string
+                  type: object
+                type: array
+              installationID:
+                description: InstallationID is an optional unique identifier for this
+                  Argo CD installation. It is not set by default.
+                type: string
+              manifests:
+                properties:
+                  helm:
+                    properties:
+                      enabled:
+                        default: true
+                        type: boolean
+                      valuesFileSchemes:
+                        default:
+                        - http
+                        - https
+                        description: ValuesFileSchemes specifies which file schemes
+                          to allow for Helm values files. Default allowed schemes
+                          are "http" and "https".
+                        items:
+                          type: string
+                        type: array
+                    required:
+                    - enabled
+                    - valuesFileSchemes
+                    type: object
+                  jsonnet:
+                    properties:
+                      enabled:
+                        default: true
+                        type: boolean
+                    required:
+                    - enabled
+                    type: object
+                  kustomize:
+                    properties:
+                      buildOptions:
+                        type: string
+                      enabled:
+                        default: true
+                        type: boolean
+                      versions:
+                        description: Versions is a list of custom Kustomize versions.
+                          Each version must have a unique name.
+                        items:
+                          properties:
+                            buildOptions:
+                              type: string
+                            name:
+                              type: string
+                            path:
+                              type: string
+                          required:
+                          - name
+                          - path
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
+                    required:
+                    - enabled
+                    type: object
+                required:
+                - helm
+                - jsonnet
+                - kustomize
+                type: object
+              resourceCustomizations:
+                description: ResourceCustomizations defines special treatment for
+                  specific resources.
+                properties:
+                  actions:
+                    description: |-
+                      Actions defines custom actions that can be performed on specific resources. Many actions are built-in and are not
+                      defined here. Actions defined here override built-in actions.
+                    items:
+                      properties:
+                        actions:
+                          items:
+                            properties:
+                              name:
+                                type: string
+                              script:
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            - script
+                            type: object
+                          minItems: 1
+                          type: array
+                        discovery:
+                          properties:
+                            script:
+                              minLength: 1
+                              type: string
+                          required:
+                          - script
+                          type: object
+                        group:
+                          type: string
+                        kind:
+                          type: string
+                      required:
+                      - actions
+                      - kind
+                      type: object
+                    type: array
+                  exclusions:
+                    description: |-
+                      Exclusions is a list of resources to exclude from Argo CD management. A number of resources are excluded by
+                      default. Those defaults can be overridden by specifying them here. If you'd like to add to the defaults, you must
+                      patch the field instead of replacing it.
+                    items:
+                      properties:
+                        clusters:
+                          description: Clusters specifies which clusters this inclusion
+                            or exclusion applies to. If empty, applies to all clusters.
+                          items:
+                            type: string
+                          type: array
+                        groups:
+                          items:
+                            type: string
+                          type: array
+                        kinds:
+                          items:
+                            type: string
+                          type: array
+                      required:
+                      - groups
+                      - kinds
+                      type: object
+                    type: array
+                  health:
+                    description: |-
+                      Health defines custom health checks for specific resources. Many health checks are built-in and are not defined
+                      here. Checks defined here override built-in checks.
+                    items:
+                      properties:
+                        group:
+                          type: string
+                        kind:
+                          type: string
+                        script:
+                          type: string
+                      required:
+                      - group
+                      - kind
+                      - script
+                      type: object
+                    type: array
+                  ignore:
+                    description: Ignore defines resources and fields to ignore during
+                      comparison.
+                    properties:
+                      differences:
+                        properties:
+                          rules:
+                            items:
+                              description: Rule defines a rule for ignoring differences
+                                or allowing updates for specific resources and fields.
+                              properties:
+                                group:
+                                  type: string
+                                jqPathExpressions:
+                                  items:
+                                    type: string
+                                  type: array
+                                jsonPointers:
+                                  items:
+                                    type: string
+                                  type: array
+                                kind:
+                                  type: string
+                                managedFieldsManagers:
+                                  items:
+                                    type: string
+                                  type: array
+                              required:
+                              - kind
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - group
+                            - kind
+                            x-kubernetes-list-type: map
+                        required:
+                        - rules
+                        type: object
+                      updates:
+                        properties:
+                          enabled:
+                            default: true
+                            type: boolean
+                          rules:
+                            items:
+                              description: Rule defines a rule for ignoring differences
+                                or allowing updates for specific resources and fields.
+                              properties:
+                                group:
+                                  type: string
+                                jqPathExpressions:
+                                  items:
+                                    type: string
+                                  type: array
+                                jsonPointers:
+                                  items:
+                                    type: string
+                                  type: array
+                                kind:
+                                  type: string
+                                managedFieldsManagers:
+                                  items:
+                                    type: string
+                                  type: array
+                              required:
+                              - kind
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - group
+                            - kind
+                            x-kubernetes-list-type: map
+                        required:
+                        - enabled
+                        - rules
+                        type: object
+                    type: object
+                  inclusions:
+                    items:
+                      properties:
+                        clusters:
+                          description: Clusters specifies which clusters this inclusion
+                            or exclusion applies to. If empty, applies to all clusters.
+                          items:
+                            type: string
+                          type: array
+                        groups:
+                          items:
+                            type: string
+                          type: array
+                        kinds:
+                          items:
+                            type: string
+                          type: array
+                      required:
+                      - groups
+                      - kinds
+                      type: object
+                    type: array
+                required:
+                - ignore
+                type: object
+              resourceTracking:
+                properties:
+                  instanceLabelKey:
+                    default: app.kubernetes.io/instance
+                    description: InstanceLabelKey is the label key to use to uniquely
+                      identify the instance of an application. The default is "app.kubernetes.io/instance".
+                    type: string
+                  method:
+                    default: annotation
+                    description: |-
+                      Method specifies how Argo CD tracks resources. Supported values are "annotation", "label", and "annotation+label".
+                      The default is "annotation".
+                    enum:
+                    - annotation
+                    - label
+                    - annotation+label
+                    type: string
+                required:
+                - instanceLabelKey
+                - method
+                type: object
+              server:
+                properties:
+                  additionalUrls:
+                    items:
+                      type: string
+                    type: array
+                  authentication:
+                    properties:
+                      accounts:
+                        items:
+                          properties:
+                            allowApiKey:
+                              type: boolean
+                            allowLogin:
+                              type: boolean
+                            enabled:
+                              type: boolean
+                            name:
+                              type: string
+                          required:
+                          - allowApiKey
+                          - allowLogin
+                          - enabled
+                          - name
+                          type: object
+                        type: array
+                      adminEnabled:
+                        type: boolean
+                      anonymousUsersEnabled:
+                        type: boolean
+                      dex:
+                        properties:
+                          connectors:
+                            items:
+                              properties:
+                                config:
+                                  properties:
+                                    clientID:
+                                      type: string
+                                    clientSecret:
+                                      type: string
+                                    orgs:
+                                      items:
+                                        properties:
+                                          name:
+                                            type: string
+                                          teams:
+                                            items:
+                                              type: string
+                                            type: array
+                                        required:
+                                        - name
+                                        - teams
+                                        type: object
+                                      type: array
+                                  required:
+                                  - clientID
+                                  - clientSecret
+                                  - orgs
+                                  type: object
+                                id:
+                                  type: string
+                                name:
+                                  type: string
+                                type:
+                                  type: string
+                              required:
+                              - config
+                              - id
+                              - name
+                              - type
+                              type: object
+                            type: array
+                          staticClients:
+                            items:
+                              properties:
+                                id:
+                                  type: string
+                                name:
+                                  type: string
+                                redirectURIs:
+                                  items:
+                                    type: string
+                                  type: array
+                                secret:
+                                  type: string
+                              required:
+                              - id
+                              - name
+                              - redirectURIs
+                              - secret
+                              type: object
+                            type: array
+                        required:
+                        - connectors
+                        - staticClients
+                        type: object
+                      oidc:
+                        properties:
+                          azure:
+                            properties:
+                              useWorkloadIdentity:
+                                type: boolean
+                            type: object
+                          cliClientID:
+                            type: string
+                          clientID:
+                            type: string
+                          clientSecret:
+                            type: string
+                          domainHint:
+                            type: string
+                          enablePKCEAuthentication:
+                            type: boolean
+                          enableUserInfoGroups:
+                            type: boolean
+                          issuer:
+                            type: string
+                          logoutURL:
+                            type: string
+                          name:
+                            type: string
+                          requestedIDTokenClaims:
+                            items:
+                              properties:
+                                essential:
+                                  type: boolean
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                                values:
+                                  items:
+                                    type: string
+                                  type: array
+                              required:
+                              - name
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - name
+                            x-kubernetes-list-type: map
+                          requestedScopes:
+                            items:
+                              type: string
+                            type: array
+                          rootCA:
+                            type: string
+                          userInfoCacheExpiration:
+                            type: string
+                          userInfoPath:
+                            type: string
+                        type: object
+                      passwordPattern:
+                        default: ^.{8,32}$
+                        type: string
+                      sessionDuration:
+                        default: 24h
+                        type: string
+                    required:
+                    - accounts
+                    - adminEnabled
+                    - anonymousUsersEnabled
+                    - dex
+                    - oidc
+                    - passwordPattern
+                    - sessionDuration
+                    type: object
+                  exec:
+                    description: Exec configures the UI exec feature and allowed shells.
+                    properties:
+                      enabled:
+                        description: Enabled indicates whether the UI exec feature
+                          is enabled.
+                        type: boolean
+                      shells:
+                        default:
+                        - bash
+                        - sh
+                        - powershell
+                        - cmd
+                        description: Shells restricts which shells are allowed for
+                          exec, and in which order they are attempted.
+                        items:
+                          type: string
+                        type: array
+                    required:
+                    - enabled
+                    - shells
+                    type: object
+                  extensions:
+                    items:
+                      description: Extension defines an ArgoCD UI/API extension and
+                        its backend configuration.
+                      properties:
+                        backend:
+                          description: Backend configures the extension backend connection
+                            and services.
+                          properties:
+                            connectionTimeout:
+                              description: ConnectionTimeout is the maximum time to
+                                wait for a backend connection to complete.
+                              type: string
+                            idleConnectionTimeout:
+                              description: IdleConnectionTimeout is the maximum idle
+                                time before closing a keep-alive connection.
+                              type: string
+                            keepAlive:
+                              description: KeepAlive specifies the interval between
+                                keep-alive probes for an active connection.
+                              type: string
+                            maxIdleConnections:
+                              description: MaxIdleConnections controls the maximum
+                                number of idle connections to the backend.
+                              format: int64
+                              type: integer
+                            services:
+                              description: Services lists the backend service URLs
+                                and cluster mappings.
+                              items:
+                                description: Service defines a backend service URL
+                                  and optional cluster mapping for extension routing.
+                                properties:
+                                  cluster:
+                                    description: Cluster maps the service to a specific
+                                      cluster destination.
+                                    properties:
+                                      name:
+                                        description: Name is the cluster name for
+                                          service routing.
+                                        type: string
+                                      server:
+                                        description: Server is the cluster server
+                                          address for service routing.
+                                        type: string
+                                    required:
+                                    - name
+                                    - server
+                                    type: object
+                                  url:
+                                    description: Url is the address where the extension
+                                      backend service is available.
+                                    type: string
+                                required:
+                                - cluster
+                                - url
+                                type: object
+                              type: array
+                          required:
+                          - connectionTimeout
+                          - idleConnectionTimeout
+                          - keepAlive
+                          - maxIdleConnections
+                          - services
+                          type: object
+                        name:
+                          description: Name defines the endpoint used to register
+                            the extension route.
+                          type: string
+                      required:
+                      - backend
+                      - name
+                      type: object
+                    type: array
+                  maxPodLogsToRender:
+                    default: 10
+                    description: Max number of pod logs to render in the UI. Default
+                      is 10.
+                    format: int64
+                    type: integer
+                  rbac:
+                    properties:
+                      fineGrainedInheritance:
+                        default: false
+                        properties:
+                          enabled:
+                            default: false
+                            type: boolean
+                        required:
+                        - enabled
+                        type: object
+                    required:
+                    - fineGrainedInheritance
+                    type: object
+                  ui:
+                    properties:
+                      allowedNodeLabels:
+                        description: AllowedNodeLabels specifies which node labels
+                          may be shown in the UI. By default, none are shown.
+                        items:
+                          type: string
+                        type: array
+                      analytics:
+                        properties:
+                          google:
+                            properties:
+                              anonymizeUsers:
+                                default: true
+                                type: boolean
+                              trackingId:
+                                type: string
+                            required:
+                            - anonymizeUsers
+                            type: object
+                        required:
+                        - google
+                        type: object
+                      banner:
+                        properties:
+                          content:
+                            type: string
+                          permanent:
+                            type: boolean
+                          position:
+                            type: string
+                          url:
+                            pattern: ^https?://
+                            type: string
+                        required:
+                        - content
+                        - permanent
+                        - position
+                        - url
+                        type: object
+                      cssUrl:
+                        type: string
+                      customLabels:
+                        items:
+                          type: string
+                        type: array
+                      deepLinks:
+                        description: DeepLinks defines project, application, and resource-level
+                          deep links for the ArgoCD UI.
+                        properties:
+                          application:
+                            description: Application contains deep links for applications.
+                            items:
+                              description: Link defines a UI deep link, with optional
+                                conditional display and icon.
+                              properties:
+                                description:
+                                  description: Description is an optional description
+                                    for the link.
+                                  type: string
+                                iconClass:
+                                  description: IconClass is an optional icon CSS class
+                                    for the link.
+                                  type: string
+                                if:
+                                  description: If is an optional condition for displaying
+                                    the link, using expr-lang expressions.
+                                  type: string
+                                title:
+                                  description: Title is the display text for the link.
+                                  type: string
+                                url:
+                                  description: Url is the target URL for the link.
+                                    Supports Go template expressions.
+                                  type: string
+                              required:
+                              - title
+                              - url
+                              type: object
+                            type: array
+                          project:
+                            description: Project contains deep links for projects.
+                            items:
+                              description: Link defines a UI deep link, with optional
+                                conditional display and icon.
+                              properties:
+                                description:
+                                  description: Description is an optional description
+                                    for the link.
+                                  type: string
+                                iconClass:
+                                  description: IconClass is an optional icon CSS class
+                                    for the link.
+                                  type: string
+                                if:
+                                  description: If is an optional condition for displaying
+                                    the link, using expr-lang expressions.
+                                  type: string
+                                title:
+                                  description: Title is the display text for the link.
+                                  type: string
+                                url:
+                                  description: Url is the target URL for the link.
+                                    Supports Go template expressions.
+                                  type: string
+                              required:
+                              - title
+                              - url
+                              type: object
+                            type: array
+                          resource:
+                            description: Resource contains deep links for resources.
+                            items:
+                              description: Link defines a UI deep link, with optional
+                                conditional display and icon.
+                              properties:
+                                description:
+                                  description: Description is an optional description
+                                    for the link.
+                                  type: string
+                                iconClass:
+                                  description: IconClass is an optional icon CSS class
+                                    for the link.
+                                  type: string
+                                if:
+                                  description: If is an optional condition for displaying
+                                    the link, using expr-lang expressions.
+                                  type: string
+                                title:
+                                  description: Title is the display text for the link.
+                                  type: string
+                                url:
+                                  description: Url is the target URL for the link.
+                                    Supports Go template expressions.
+                                  type: string
+                              required:
+                              - title
+                              - url
+                              type: object
+                            type: array
+                        required:
+                        - application
+                        - project
+                        - resource
+                        type: object
+                      help:
+                        properties:
+                          chat:
+                            properties:
+                              download:
+                                items:
+                                  properties:
+                                    architecture:
+                                      enum:
+                                      - darwin-amd64
+                                      - darwin-arm64
+                                      - windows-amd64
+                                      - linux-amd64
+                                      - linux-arm64
+                                      - linux-ppc64le
+                                      - linux-s390x
+                                      type: string
+                                    path:
+                                      type: string
+                                  required:
+                                  - architecture
+                                  - path
+                                  type: object
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                - architecture
+                                x-kubernetes-list-type: map
+                              text:
+                                type: string
+                              url:
+                                type: string
+                            type: object
+                        type: object
+                      maskSensitiveAnnotations:
+                        items:
+                          type: string
+                        type: array
+                      statusBadge:
+                        properties:
+                          enabled:
+                            type: boolean
+                          url:
+                            type: string
+                        required:
+                        - enabled
+                        - url
+                        type: object
+                    required:
+                    - analytics
+                    - banner
+                    - cssUrl
+                    - customLabels
+                    - deepLinks
+                    - help
+                    - maskSensitiveAnnotations
+                    - statusBadge
+                    type: object
+                  url:
+                    pattern: ^https?://
+                    type: string
+                  webhook:
+                    description: Webhook configures the webhook server settings.
+                    properties:
+                      maxPayloadSize:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: MaxPayloadSize is the maximum size (in MB) of
+                          the payload that can be sent to the webhook server.
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                    required:
+                    - maxPayloadSize
+                    type: object
+                required:
+                - additionalUrls
+                - authentication
+                - exec
+                - extensions
+                - maxPodLogsToRender
+                - rbac
+                - ui
+                - url
+                - webhook
+                type: object
+            required:
+            - application
+            - manifests
+            - resourceCustomizations
+            - resourceTracking
+            - server
+            type: object
+          status:
+            description: ConfigurationStatus defines the observed state of Configuration.
+            type: object
+        required:
+        - metadata
+        type: object
+    served: true
+    storage: true

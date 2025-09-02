@@ -60,7 +60,7 @@ func TestKustomize2AppSource(t *testing.T) {
 		Expect(OperationPhaseIs(OperationSucceeded)).
 		Expect(SyncStatusIs(SyncStatusCodeSynced)).
 		Expect(HealthIs(health.HealthStatusHealthy)).
-		And(patchLabelMatchesFor("Service")).
+		And(patchLabelMatchesFor("ExtensionService")).
 		And(patchLabelMatchesFor("Deployment"))
 }
 

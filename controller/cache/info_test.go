@@ -28,7 +28,7 @@ func strToUnstructured(jsonStr string) *unstructured.Unstructured {
 var (
 	testService = strToUnstructured(`
   apiVersion: v1
-  kind: Service
+  kind: ExtensionService
   metadata:
     name: helm-guestbook
     namespace: default
@@ -45,7 +45,7 @@ var (
 
 	testLinkAnnotatedService = strToUnstructured(`
   apiVersion: v1
-  kind: Service
+  kind: ExtensionService
   metadata:
     name: helm-guestbook
     namespace: default

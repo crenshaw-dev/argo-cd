@@ -5508,7 +5508,7 @@
         "idTokenClaims": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/definitions/oidcClaim"
+            "$ref": "#/definitions/settingsoidcClaim"
           }
         },
         "issuer": {
@@ -5742,23 +5742,6 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/notificationTrigger"
-          }
-        }
-      }
-    },
-    "oidcClaim": {
-      "type": "object",
-      "properties": {
-        "essential": {
-          "type": "boolean"
-        },
-        "value": {
-          "type": "string"
-        },
-        "values": {
-          "type": "array",
-          "items": {
-            "type": "string"
           }
         }
       }
@@ -6241,6 +6224,23 @@
       "properties": {
         "token": {
           "type": "string"
+        }
+      }
+    },
+    "settingsoidcClaim": {
+      "type": "object",
+      "properties": {
+        "essential": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": "string"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

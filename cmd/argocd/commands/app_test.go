@@ -1009,10 +1009,10 @@ func TestGetService(t *testing.T) {
 func TestTargetObjects(t *testing.T) {
 	resources := []*v1alpha1.ResourceDiff{
 		{
-			TargetState: "{\"apiVersion\":\"v1\",\"kind\":\"Service\",\"metadata\":{\"name\":\"test-helm-guestbook\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
+			TargetState: "{\"apiVersion\":\"v1\",\"kind\":\"ExtensionService\",\"metadata\":{\"name\":\"test-helm-guestbook\",\"namespace\":\"argocd\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
 		},
 		{
-			TargetState: "{\"apiVersion\":\"v1\",\"kind\":\"Service\",\"metadata\":{\"name\":\"test-helm-guestbook\",\"namespace\":\"ns\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
+			TargetState: "{\"apiVersion\":\"v1\",\"kind\":\"ExtensionService\",\"metadata\":{\"name\":\"test-helm-guestbook\",\"namespace\":\"ns\"},\"spec\":{\"selector\":{\"app\":\"helm-guestbook\",\"release\":\"test\"},\"sessionAffinity\":\"None\",\"type\":\"ClusterIP\"},\"status\":{\"loadBalancer\":{}}}",
 		},
 	}
 	objects, err := targetObjects(resources)
@@ -1265,13 +1265,13 @@ func TestFilterAppResources(t *testing.T) {
 		}
 		appService1 = v1alpha1.ResourceStatus{
 			Group:     "",
-			Kind:      "Service",
+			Kind:      "ExtensionService",
 			Namespace: "default",
 			Name:      "service-name1",
 		}
 		appService2 = v1alpha1.ResourceStatus{
 			Group:     "",
-			Kind:      "Service",
+			Kind:      "ExtensionService",
 			Namespace: "default",
 			Name:      "service-name2",
 		}
@@ -1314,18 +1314,18 @@ func TestFilterAppResources(t *testing.T) {
 			Namespace: "",
 			Exclude:   true,
 		}
-		// *:Service:*
+		// *:ExtensionService:*
 		includeAllServiceResources = v1alpha1.SyncOperationResource{
 			Group:     "*",
-			Kind:      "Service",
+			Kind:      "ExtensionService",
 			Name:      "*",
 			Namespace: "",
 			Exclude:   false,
 		}
-		// !*:Service:*
+		// !*:ExtensionService:*
 		excludeAllServiceResources = v1alpha1.SyncOperationResource{
 			Group:     "*",
-			Kind:      "Service",
+			Kind:      "ExtensionService",
 			Name:      "*",
 			Namespace: "",
 			Exclude:   true,
@@ -1378,13 +1378,13 @@ func TestFilterAppResources(t *testing.T) {
 		}
 		service1 = v1alpha1.SyncOperationResource{
 			Group:     "",
-			Kind:      "Service",
+			Kind:      "ExtensionService",
 			Namespace: "default",
 			Name:      "service-name1",
 		}
 		service2 = v1alpha1.SyncOperationResource{
 			Group:     "",
-			Kind:      "Service",
+			Kind:      "ExtensionService",
 			Namespace: "default",
 			Name:      "service-name2",
 		}
@@ -1400,19 +1400,19 @@ func TestFilterAppResources(t *testing.T) {
 		selectedResources []*v1alpha1.SyncOperationResource
 		expectedResult    []*v1alpha1.SyncOperationResource
 	}{
-		// --resource apps:ReplicaSet:replicaSet-name1 --resource *:Service:*
+		// --resource apps:ReplicaSet:replicaSet-name1 --resource *:ExtensionService:*
 		{
 			testName:          "Include ReplicaSet replicaSet-name1 resource and all service resources",
 			selectedResources: []*v1alpha1.SyncOperationResource{&includeAllServiceResources, &includeReplicaSet1Resource},
 			expectedResult:    []*v1alpha1.SyncOperationResource{&replicaSet1, &service1, &service2},
 		},
-		// --resource apps:ReplicaSet:replicaSet-name1 --resource !*:Service:*
+		// --resource apps:ReplicaSet:replicaSet-name1 --resource !*:ExtensionService:*
 		{
 			testName:          "Include ReplicaSet replicaSet-name1 resource and exclude all service resources",
 			selectedResources: []*v1alpha1.SyncOperationResource{&excludeAllServiceResources, &includeReplicaSet1Resource},
 			expectedResult:    []*v1alpha1.SyncOperationResource{&replicaSet1},
 		},
-		// --resource !apps:ReplicaSet:replicaSet-name2 --resource !*:Service:*
+		// --resource !apps:ReplicaSet:replicaSet-name2 --resource !*:ExtensionService:*
 		{
 			testName:          "Exclude ReplicaSet replicaSet-name2 resource and all service resources",
 			selectedResources: []*v1alpha1.SyncOperationResource{&excludeReplicaSet2Resource, &excludeAllServiceResources},
@@ -1436,15 +1436,15 @@ func TestFilterAppResources(t *testing.T) {
 			selectedResources: []*v1alpha1.SyncOperationResource{&includeAllReplicaSetResource, &excludeReplicaSet2Resource},
 			expectedResult:    []*v1alpha1.SyncOperationResource{&replicaSet1},
 		},
-		// --resource !*:Service:*
+		// --resource !*:ExtensionService:*
 		{
-			testName:          "Exclude Service resources",
+			testName:          "Exclude ExtensionService resources",
 			selectedResources: []*v1alpha1.SyncOperationResource{&excludeAllServiceResources},
 			expectedResult:    []*v1alpha1.SyncOperationResource{&replicaSet1, &replicaSet2, &job, &deployment},
 		},
-		// --resource *:Service:*
+		// --resource *:ExtensionService:*
 		{
-			testName:          "Include Service resources",
+			testName:          "Include ExtensionService resources",
 			selectedResources: []*v1alpha1.SyncOperationResource{&includeAllServiceResources},
 			expectedResult:    []*v1alpha1.SyncOperationResource{&service1, &service2},
 		},
@@ -1905,7 +1905,7 @@ func TestWaitOnApplicationStatus_JSON_YAML_WideOutput(t *testing.T) {
 	timeStr := time.Now().Format("2006-01-02T15:04:05-07:00")
 
 	expectation := `TIMESTAMP                  GROUP        KIND   NAMESPACE                  NAME    STATUS   HEALTH        HOOK  MESSAGE
-%s            Service     default         service-name1    Synced  Healthy              
+%s            ExtensionService     default         service-name1    Synced  Healthy              
 %s   apps  Deployment     default                  test    Synced  Healthy              
 
 Name:               argocd/test
@@ -1933,7 +1933,7 @@ Duration:           2333448h16m18.871345152s
 Message:            test
 
 GROUP  KIND        NAMESPACE  NAME           STATUS  HEALTH   HOOK  MESSAGE
-       Service     default    service-name1  Synced  Healthy        
+       ExtensionService     default    service-name1  Synced  Healthy        
 apps   Deployment  default    test           Synced  Healthy        
 `
 	expectation = fmt.Sprintf(expectation, timeStr, timeStr)
@@ -1966,7 +1966,7 @@ func TestWaitOnApplicationStatus_JSON_YAML_WideOutput_With_Timeout(t *testing.T)
 	timeStr := time.Now().Format("2006-01-02T15:04:05-07:00")
 
 	expectation := `TIMESTAMP                  GROUP        KIND   NAMESPACE                  NAME    STATUS   HEALTH        HOOK  MESSAGE
-%s            Service     default         service-name1    Synced  Healthy              
+%s            ExtensionService     default         service-name1    Synced  Healthy              
 %s   apps  Deployment     default                  test    Synced  Healthy              
 
 The command timed out waiting for the conditions to be met.
@@ -1998,7 +1998,7 @@ Duration:           2333448h16m18.871345152s
 Message:            test
 
 GROUP  KIND        NAMESPACE  NAME           STATUS  HEALTH   HOOK  MESSAGE
-       Service     default    service-name1  Synced  Healthy        
+       ExtensionService     default    service-name1  Synced  Healthy        
 apps   Deployment  default    test           Synced  Healthy        
 `
 	expectation = fmt.Sprintf(expectation, timeStr, timeStr)
@@ -2098,7 +2098,7 @@ func (c *fakeAppServiceClient) Get(_ context.Context, _ *applicationpkg.Applicat
 			Resources: []v1alpha1.ResourceStatus{
 				{
 					Group:     "",
-					Kind:      "Service",
+					Kind:      "ExtensionService",
 					Namespace: "default",
 					Name:      "service-name1",
 					Status:    "Synced",
