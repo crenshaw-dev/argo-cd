@@ -20,7 +20,7 @@ var kindToCRDPath = map[string]string{
 	application.ApplicationFullName:    "manifests/crds/application-crd.yaml",
 	application.AppProjectFullName:     "manifests/crds/appproject-crd.yaml",
 	application.ApplicationSetFullName: "manifests/crds/applicationset-crd.yaml",
-	application.ConfigurationFullName:  "manifests/crds/configuration-crd.yaml",
+	application.ArgoCDConfigFullName:   "manifests/crds/argocdconfig-crd.yaml",
 }
 
 func getCustomResourceDefinitions() map[string]*apiextensionsv1.CustomResourceDefinition {

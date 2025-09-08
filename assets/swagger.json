@@ -5388,7 +5388,7 @@
           "type": "boolean"
         },
         "kind": {
-          "description": "Kind specifies the type of the resource (e.g., \"Deployment\", \"Service\").",
+          "description": "Kind specifies the type of the resource (e.g., \"Deployment\", \"ExtensionService\").",
           "type": "string"
         },
         "name": {
@@ -8711,9 +8711,13 @@
           "type": "string",
           "title": "BuildOptions is a string of build parameters to use when calling `kustomize build`"
         },
+        "enabled": {
+          "type": "boolean",
+          "title": "+kubebuilder:default=true"
+        },
         "versions": {
-          "description": "Versions is a list of Kustomize versions and their corresponding binary paths and build options.",
           "type": "array",
+          "title": "Versions is a list of Kustomize versions and their corresponding binary paths and build options.\n+listMapKey=name\n+listType=map",
           "items": {
             "$ref": "#/definitions/v1alpha1KustomizeVersion"
           }
@@ -9681,7 +9685,7 @@
           "type": "boolean"
         },
         "kind": {
-          "description": "Kind represents the Kubernetes resource kind (e.g., \"Deployment\", \"Service\").",
+          "description": "Kind represents the Kubernetes resource kind (e.g., \"Deployment\", \"ExtensionService\").",
           "type": "string"
         },
         "liveState": {

@@ -21,8 +21,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ConfigurationSpec defines the desired state of Configuration.
-type ConfigurationSpec struct {
+// ArgoCDConfigSpec defines the desired state of ArgoCDConfig.
+type ArgoCDConfigSpec struct {
 	ResourceCustomizations ResourceCustomizations `json:"resourceCustomizations" protobuf:"bytes,1,opt,name=resourceCustomizations"`
 	Manifests              Manifests              `json:"manifests" protobuf:"bytes,2,opt,name=manifests"`
 	ResourceTracking       ResourceTracking       `json:"resourceTracking" protobuf:"bytes,3,opt,name=resourceTracking"`
@@ -33,31 +33,31 @@ type ConfigurationSpec struct {
 	GlobalProjects []GlobalProject   `json:"globalProjects,omitempty" protobuf:"bytes,7,rep,name=globalProjects"`
 }
 
-// ConfigurationStatus defines the observed state of Configuration.
-type ConfigurationStatus struct {
+// ArgoCDConfigStatus defines the observed state of ArgoCDConfig.
+type ArgoCDConfigStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 }
 
-// Configuration is the Schema for the configurations API.
+// ArgoCDConfig is the Schema for the argocdconfigs API.
 // +genclient
 // +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:path=configurations,shortName=config;configs
-type Configuration struct {
+// +kubebuilder:resource:path=argocdconfigs,shortName=argocdconfig;argocdconfigs
+type ArgoCDConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec   ConfigurationSpec   `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
-	Status ConfigurationStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
+	Spec   ArgoCDConfigSpec   `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+	Status ArgoCDConfigStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
 }
 
-// ConfigurationList contains a list of Configuration.
+// ArgoCDConfigList contains a list of ArgoCDConfig.
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type ConfigurationList struct {
+type ArgoCDConfigList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-	Items           []Configuration `json:"items" protobuf:"bytes,2,rep,name=items"`
+	Items           []ArgoCDConfig `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
 type GlobalProject struct {
@@ -231,7 +231,7 @@ type WebConfig struct {
 
 type LoggerConfig struct {
 	Level  string `json:"level" protobuf:"bytes,1,opt,name=level"`
-	Format string `json:"format" proto:"bytes,2,opt,name=format"`
+	Format string `json:"format" proto:"bytes,2,opt,name=format" protobuf:"bytes,2,opt,name=format"`
 }
 
 type OAuth2Config struct {
@@ -390,21 +390,21 @@ type Backend struct {
 	// ConnectionTimeout is the maximum amount of time a dial to
 	// the extension server will wait for a connect to complete.
 	// Default: 2 seconds
-	// +kubebuilder:default=2s
+	// +kubebuilder:default=`2s`
 	ConnectionTimeout metav1.Duration `json:"connectionTimeout" protobuf:"bytes,1,opt,name=connectionTimeout"`
 
 	// KeepAlive specifies the interval between keep-alive probes
 	// for an active network connection between the API server and
 	// the extension server.
 	// Default: 15 seconds
-	// +kubebuilder:default=15s
+	// +kubebuilder:default=`15s`
 	KeepAlive metav1.Duration `json:"keepAlive" protobuf:"bytes,2,opt,name=keepAlive"`
 
 	// IdleConnectionTimeout is the maximum amount of time an idle
 	// (keep-alive) connection between the API server and the extension
 	// server will remain idle before closing itself.
 	// Default: 60 seconds
-	// +kubebuilder:default=60s
+	// +kubebuilder:default=`60s`
 	IdleConnectionTimeout metav1.Duration `json:"idleConnectionTimeout" protobuf:"bytes,3,opt,name=idleConnectionTimeout"`
 
 	// MaxIdleConnections controls the maximum number of idle (keep-alive)

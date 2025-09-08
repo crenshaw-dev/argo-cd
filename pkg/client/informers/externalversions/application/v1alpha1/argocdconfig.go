@@ -16,71 +16,71 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 )
 
-// ConfigurationInformer provides access to a shared informer and lister for
-// Configurations.
-type ConfigurationInformer interface {
+// ArgoCDConfigInformer provides access to a shared informer and lister for
+// ArgoCDConfigs.
+type ArgoCDConfigInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() applicationv1alpha1.ConfigurationLister
+	Lister() applicationv1alpha1.ArgoCDConfigLister
 }
 
-type configurationInformer struct {
+type argoCDConfigInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 	namespace        string
 }
 
-// NewConfigurationInformer constructs a new informer for Configuration type.
+// NewArgoCDConfigInformer constructs a new informer for ArgoCDConfig type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewConfigurationInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredConfigurationInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewArgoCDConfigInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredArgoCDConfigInformer(client, namespace, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredConfigurationInformer constructs a new informer for Configuration type.
+// NewFilteredArgoCDConfigInformer constructs a new informer for ArgoCDConfig type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredConfigurationInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredArgoCDConfigInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ArgoprojV1alpha1().Configurations(namespace).List(context.Background(), options)
+				return client.ArgoprojV1alpha1().ArgoCDConfigs(namespace).List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ArgoprojV1alpha1().Configurations(namespace).Watch(context.Background(), options)
+				return client.ArgoprojV1alpha1().ArgoCDConfigs(namespace).Watch(context.Background(), options)
 			},
 			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ArgoprojV1alpha1().Configurations(namespace).List(ctx, options)
+				return client.ArgoprojV1alpha1().ArgoCDConfigs(namespace).List(ctx, options)
 			},
 			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ArgoprojV1alpha1().Configurations(namespace).Watch(ctx, options)
+				return client.ArgoprojV1alpha1().ArgoCDConfigs(namespace).Watch(ctx, options)
 			},
 		},
-		&apisapplicationv1alpha1.Configuration{},
+		&apisapplicationv1alpha1.ArgoCDConfig{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *configurationInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredConfigurationInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *argoCDConfigInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredArgoCDConfigInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *configurationInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisapplicationv1alpha1.Configuration{}, f.defaultInformer)
+func (f *argoCDConfigInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&apisapplicationv1alpha1.ArgoCDConfig{}, f.defaultInformer)
 }
 
-func (f *configurationInformer) Lister() applicationv1alpha1.ConfigurationLister {
-	return applicationv1alpha1.NewConfigurationLister(f.Informer().GetIndexer())
+func (f *argoCDConfigInformer) Lister() applicationv1alpha1.ArgoCDConfigLister {
+	return applicationv1alpha1.NewArgoCDConfigLister(f.Informer().GetIndexer())
 }

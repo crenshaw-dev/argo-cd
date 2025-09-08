@@ -3209,32 +3209,32 @@ type HelmOptions struct {
 // KustomizeVersion holds information about additional Kustomize versions
 type KustomizeVersion struct {
 	// Name holds Kustomize version name
-	Name string `protobuf:"bytes,1,opt,name=name"`
+	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
 	// Path holds the corresponding binary path
-	Path string `protobuf:"bytes,2,opt,name=path"`
+	Path string `json:"path,omitempty" protobuf:"bytes,2,opt,name=path"`
 	// BuildOptions that are specific to a Kustomize version
-	BuildOptions string `protobuf:"bytes,3,opt,name=buildOptions"`
+	BuildOptions string `json:"buildOptions,omitempty" protobuf:"bytes,3,opt,name=buildOptions"`
 }
 
 // KustomizeOptions are options for kustomize to use when building manifests
 type KustomizeOptions struct {
 	// +kubebuilder:default=true
-	Enabled bool `json:"enabled" protobuf:"bytes,1,opt,name=enabled"`
+	Enabled bool `json:"enabled,omitempty" protobuf:"bytes,4,opt,name=enabled"`
 
 	// BuildOptions is a string of build parameters to use when calling `kustomize build`
-	BuildOptions string `protobuf:"bytes,1,opt,name=buildOptions"`
+	BuildOptions string `json:"build-options,omitempty" protobuf:"bytes,1,opt,name=buildOptions"`
 
 	// BinaryPath holds optional path to kustomize binary
 	//
 	// Deprecated: Use settings.Settings instead. See: settings.Settings.KustomizeVersions.
 	// If this field is set, it will be used as the Kustomize binary path.
 	// Otherwise, Versions is used.
-	BinaryPath string `protobuf:"bytes,2,opt,name=binaryPath"`
+	BinaryPath string `json:"binaryPath,omitempty" protobuf:"bytes,2,opt,name=binaryPath"`
 
 	// Versions is a list of Kustomize versions and their corresponding binary paths and build options.
 	// +listMapKey=name
 	// +listType=map
-	Versions []KustomizeVersion `protobuf:"bytes,3,rep,name=versions"`
+	Versions []KustomizeVersion `json:"versions,omitempty" protobuf:"bytes,3,rep,name=versions"`
 }
 
 // ApplicationDestinationServiceAccount holds information about the service account to be impersonated for the application sync operation.

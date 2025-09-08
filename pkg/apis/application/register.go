@@ -25,10 +25,10 @@ const (
 	ApplicationSetPlural    string = "applicationsets"
 	ApplicationSetFullName  string = ApplicationSetPlural + "." + Group
 
-	// Configuration constants
-	ConfigurationKind      string = "Configuration"
-	ConfigurationSingular  string = "configuration"
-	ConfigurationPlural    string = "configurations"
-	ConfigurationShortName string = "config"
-	ConfigurationFullName  string = ConfigurationPlural + "." + Group
+	// ArgoCDConfig constants
+	ArgoCDConfigKind      string = "ArgoCDConfig"
+	ArgoCDConfigSingular   string = "argocdconfig"
+	ArgoCDConfigPlural     string = "argocdconfigs"
+	ArgoCDConfigShortName string = "argocdconfig"
+	ArgoCDConfigFullName   string = ArgoCDConfigPlural + "." + Group
 )

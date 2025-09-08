@@ -585,14 +585,14 @@ func (mgr *SettingsManager) updateSecret(callback func(*corev1.Secret) error) er
 	return mgr.ResyncInformers()
 }
 
-func (mgr *SettingsManager) updateConfigMap(callback func(configuration *v1alpha1.Configuration) error) error {
+func (mgr *SettingsManager) updateConfigMap(callback func(configuration *v1alpha1.ArgoCDConfig) error) error {
 	argoCDCM, err := mgr.getConfigMap()
 	createCM := false
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return err
 		}
-		argoCDCM = &v1alpha1.Configuration{
+		argoCDCM = &v1alpha1.ArgoCDConfig{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "config",
 			},
@@ -610,9 +610,9 @@ func (mgr *SettingsManager) updateConfigMap(callback func(configuration *v1alpha
 	}
 
 	if createCM {
-		_, err = mgr.appClient.ArgoprojV1alpha1().Configurations(mgr.namespace).Create(context.Background(), argoCDCM, metav1.CreateOptions{})
+		_, err = mgr.appClient.ArgoprojV1alpha1().ArgoCDConfigs(mgr.namespace).Create(context.Background(), argoCDCM, metav1.CreateOptions{})
 	} else {
-		_, err = mgr.appClient.ArgoprojV1alpha1().Configurations(mgr.namespace).Update(context.Background(), argoCDCM, metav1.UpdateOptions{})
+		_, err = mgr.appClient.ArgoprojV1alpha1().ArgoCDConfigs(mgr.namespace).Update(context.Background(), argoCDCM, metav1.UpdateOptions{})
 	}
 
 	if err != nil {
@@ -622,8 +622,8 @@ func (mgr *SettingsManager) updateConfigMap(callback func(configuration *v1alpha
 	return mgr.ResyncInformers()
 }
 
-func (mgr *SettingsManager) getConfigMap() (*v1alpha1.Configuration, error) {
-	return mgr.appClient.ArgoprojV1alpha1().Configurations(mgr.namespace).Get(context.Background(), "config", metav1.GetOptions{})
+func (mgr *SettingsManager) getConfigMap() (*v1alpha1.ArgoCDConfig, error) {
+	return mgr.appClient.ArgoprojV1alpha1().ArgoCDConfigs(mgr.namespace).Get(context.Background(), "config", metav1.GetOptions{})
 }
 
 // Returns the ConfigMap with the given name from the cluster.
@@ -844,16 +844,48 @@ func (mgr *SettingsManager) GetResourceOverrides() (map[string]v1alpha1.Resource
 		return nil, fmt.Errorf("error retrieving config map: %w", err)
 	}
 	resourceOverrides := map[string]v1alpha1.ResourceOverride{}
-	if value, ok := argoCDCM.Data[resourceCustomizationsKey]; ok && value != "" {
-		err := yaml.Unmarshal([]byte(value), &resourceOverrides)
-		if err != nil {
-			return nil, err
+
+	for _, ignoreUpdateRule := range argoCDCM.Spec.ResourceCustomizations.Ignore.Updates.Rules {
+		gk := ignoreUpdateRule.Kind
+		if ignoreUpdateRule.Group != "" {
+			gk = ignoreUpdateRule.Group + "/" + gk
 		}
+		overrideVal, ok := resourceOverrides[gk]
+		if !ok {
+			overrideVal = v1alpha1.ResourceOverride{}
+		}
+		overrideVal.IgnoreResourceUpdates.JQPathExpressions = append(overrideVal.IgnoreResourceUpdates.JQPathExpressions, ignoreUpdateRule.JqPathExpressions...)
+		overrideVal.IgnoreResourceUpdates.JSONPointers = append(overrideVal.IgnoreResourceUpdates.JSONPointers, ignoreUpdateRule.JsonPointers...)
+		overrideVal.IgnoreResourceUpdates.ManagedFieldsManagers = append(overrideVal.IgnoreResourceUpdates.ManagedFieldsManagers, ignoreUpdateRule.ManagedFieldsManagers...)
+		resourceOverrides[gk] = overrideVal
 	}
 
-	err = mgr.appendResourceOverridesFromSplitKeys(argoCDCM.Data, resourceOverrides)
-	if err != nil {
-		return nil, err
+	for _, ignoreDiffRule := range argoCDCM.Spec.ResourceCustomizations.Ignore.Differences.Rules {
+		gk := ignoreDiffRule.Kind
+		if ignoreDiffRule.Group != "" {
+			gk = ignoreDiffRule.Group + "/" + gk
+		}
+		overrideVal, ok := resourceOverrides[gk]
+		if !ok {
+			overrideVal = v1alpha1.ResourceOverride{}
+		}
+		overrideVal.IgnoreDifferences.JQPathExpressions = append(overrideVal.IgnoreDifferences.JQPathExpressions, ignoreDiffRule.JqPathExpressions...)
+		overrideVal.IgnoreDifferences.JSONPointers = append(overrideVal.IgnoreDifferences.JSONPointers, ignoreDiffRule.JsonPointers...)
+		overrideVal.IgnoreDifferences.ManagedFieldsManagers = append(overrideVal.IgnoreDifferences.ManagedFieldsManagers, ignoreDiffRule.ManagedFieldsManagers...)
+		resourceOverrides[gk] = overrideVal
+	}
+
+	for _, healthRule := range argoCDCM.Spec.ResourceCustomizations.Health {
+		gk := healthRule.Kind
+		if healthRule.Group != "" {
+			gk = healthRule.Group + "/" + gk
+		}
+		overrideVal, ok := resourceOverrides[gk]
+		if !ok {
+			overrideVal = v1alpha1.ResourceOverride{}
+		}
+		overrideVal.HealthLua = healthRule.Script
+		resourceOverrides[gk] = overrideVal
 	}
 
 	diffOptions, err := mgr.GetResourceCompareOptions()
@@ -1189,7 +1221,7 @@ func (mgr *SettingsManager) ensureSynced(forceResync bool) error {
 }
 
 // updateSettingsFromConfigMap transfers settings from a Kubernetes configmap into an ArgoCDSettings struct.
-func updateSettingsFromConfigMap(settings *ArgoCDSettings, argoCDCM *v1alpha1.Configuration) {
+func updateSettingsFromConfigMap(settings *ArgoCDSettings, argoCDCM *v1alpha1.ArgoCDConfig) {
 	dexConfig, err := yaml.Marshal(argoCDCM.Spec.Server.Authentication.Dex)
 	if err != nil {
 		log.Warnf("Could not parse Dex config, using an empty config instead: %v", err)
@@ -1214,7 +1246,7 @@ func updateSettingsFromConfigMap(settings *ArgoCDSettings, argoCDCM *v1alpha1.Co
 	settings.ExecEnabled = argoCDCM.Spec.Server.Exec.Enabled
 	settings.ExecShells = argoCDCM.Spec.Server.Exec.Shells
 	settings.TrackingMethod = argoCDCM.Spec.ResourceTracking.Method
-	// FIXME: add a field for this in v1alpha1.Configuration
+	// FIXME: add a field for this in v1alpha1.ArgoCDConfig
 	// settings.OIDCTLSInsecureSkipVerify = argoCDCM.Spec.Server.Authentication.OIDC.
 	settings.ExtensionConfig = argoCDCM.Spec.Server.Extensions
 	settings.ImpersonationEnabled = argoCDCM.Spec.Application.Sync.Impersonation.Enabled
@@ -1322,7 +1354,7 @@ func (mgr *SettingsManager) loadTLSCertificateFromSecret(secret *corev1.Secret) 
 
 // SaveSettings serializes ArgoCDSettings and upserts it into K8s secret/configmap
 func (mgr *SettingsManager) SaveSettings(settings *ArgoCDSettings) error {
-	err := mgr.updateConfigMap(func(argoCDCM *v1alpha1.Configuration) error {
+	err := mgr.updateConfigMap(func(argoCDCM *v1alpha1.ArgoCDConfig) error {
 		argoCDCM.Spec.Server.URL = settings.URL
 		if settings.DexConfig != "" {
 			argoCDCM.Data[settingDexConfigKey] = settings.DexConfig

@@ -35,8 +35,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&AppProjectList{},
 		&ApplicationSet{},
 		&ApplicationSetList{},
-		&Configuration{},
-		&ConfigurationList{},
+		&ArgoCDConfig{},
+		&ArgoCDConfigList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

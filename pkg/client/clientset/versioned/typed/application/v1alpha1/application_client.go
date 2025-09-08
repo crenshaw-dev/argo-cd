@@ -15,7 +15,7 @@ type ArgoprojV1alpha1Interface interface {
 	AppProjectsGetter
 	ApplicationsGetter
 	ApplicationSetsGetter
-	ConfigurationsGetter
+	ArgoCDConfigsGetter
 }
 
 // ArgoprojV1alpha1Client is used to interact with features provided by the argoproj.io group.
@@ -35,8 +35,8 @@ func (c *ArgoprojV1alpha1Client) ApplicationSets(namespace string) ApplicationSe
 	return newApplicationSets(c, namespace)
 }
 
-func (c *ArgoprojV1alpha1Client) Configurations(namespace string) ConfigurationInterface {
-	return newConfigurations(c, namespace)
+func (c *ArgoprojV1alpha1Client) ArgoCDConfigs(namespace string) ArgoCDConfigInterface {
+	return newArgoCDConfigs(c, namespace)
 }
 
 // NewForConfig creates a new ArgoprojV1alpha1Client for the given config.

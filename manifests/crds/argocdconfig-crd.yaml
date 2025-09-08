@@ -2,25 +2,25 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   labels:
-    app.kubernetes.io/name: configurations.argoproj.io
+    app.kubernetes.io/name: argocdconfigs.argoproj.io
     app.kubernetes.io/part-of: argocd
-  name: configurations.argoproj.io
+  name: argocdconfigs.argoproj.io
 spec:
   group: argoproj.io
   names:
-    kind: Configuration
-    listKind: ConfigurationList
-    plural: configurations
+    kind: ArgoCDConfig
+    listKind: ArgoCDConfigList
+    plural: argocdconfigs
     shortNames:
-    - config
-    - configs
-    singular: configuration
+    - argocdconfig
+    - argocdconfigs
+    singular: argocdconfig
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Configuration is the Schema for the configurations API.
+        description: ArgoCDConfig is the Schema for the argocdconfigs API.
         properties:
           apiVersion:
             description: |-
@@ -40,7 +40,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: ConfigurationSpec defines the desired state of Configuration.
+            description: ArgoCDConfigSpec defines the desired state of ArgoCDConfig.
             properties:
               application:
                 description: ApplicationConfig configures application-level settings
@@ -191,6 +191,7 @@ spec:
               manifests:
                 properties:
                   helm:
+                    description: HelmOptions holds helm options
                     properties:
                       enabled:
                         default: true
@@ -218,33 +219,46 @@ spec:
                     - enabled
                     type: object
                   kustomize:
+                    description: KustomizeOptions are options for kustomize to use
+                      when building manifests
                     properties:
-                      buildOptions:
+                      binaryPath:
+                        description: |-
+                          BinaryPath holds optional path to kustomize binary
+
+                          Deprecated: Use settings.Settings instead. See: settings.Settings.KustomizeVersions.
+                          If this field is set, it will be used as the Kustomize binary path.
+                          Otherwise, Versions is used.
+                        type: string
+                      build-options:
+                        description: BuildOptions is a string of build parameters
+                          to use when calling `kustomize build`
                         type: string
                       enabled:
                         default: true
                         type: boolean
                       versions:
-                        description: Versions is a list of custom Kustomize versions.
-                          Each version must have a unique name.
+                        description: Versions is a list of Kustomize versions and
+                          their corresponding binary paths and build options.
                         items:
+                          description: KustomizeVersion holds information about additional
+                            Kustomize versions
                           properties:
                             buildOptions:
+                              description: BuildOptions that are specific to a Kustomize
+                                version
                               type: string
                             name:
+                              description: Name holds Kustomize version name
                               type: string
                             path:
+                              description: Path holds the corresponding binary path
                               type: string
-                          required:
-                          - name
-                          - path
                           type: object
                         type: array
                         x-kubernetes-list-map-keys:
                         - name
                         x-kubernetes-list-type: map
-                    required:
-                    - enabled
                     type: object
                 required:
                 - helm
@@ -496,42 +510,35 @@ spec:
                               properties:
                                 config:
                                   properties:
-                                    clientID:
+                                    redirectURI:
                                       type: string
-                                    clientSecret:
-                                      type: string
-                                    orgs:
-                                      items:
-                                        properties:
-                                          name:
-                                            type: string
-                                          teams:
-                                            items:
-                                              type: string
-                                            type: array
-                                        required:
-                                        - name
-                                        - teams
-                                        type: object
-                                      type: array
                                   required:
-                                  - clientID
-                                  - clientSecret
-                                  - orgs
+                                  - redirectURI
                                   type: object
-                                id:
-                                  type: string
-                                name:
-                                  type: string
                                 type:
                                   type: string
                               required:
                               - config
-                              - id
-                              - name
                               - type
                               type: object
                             type: array
+                          logger:
+                            properties:
+                              format:
+                                type: string
+                              level:
+                                type: string
+                            required:
+                            - format
+                            - level
+                            type: object
+                          oauth2:
+                            properties:
+                              skipApprovalScreen:
+                                type: boolean
+                            required:
+                            - skipApprovalScreen
+                            type: object
                           staticClients:
                             items:
                               properties:
@@ -539,6 +546,8 @@ spec:
                                   type: string
                                 name:
                                   type: string
+                                public:
+                                  type: boolean
                                 redirectURIs:
                                   items:
                                     type: string
@@ -554,6 +563,7 @@ spec:
                             type: array
                         required:
                         - connectors
+                        - oauth2
                         - staticClients
                         type: object
                       oidc:
@@ -659,28 +669,42 @@ spec:
                             and services.
                           properties:
                             connectionTimeout:
-                              description: ConnectionTimeout is the maximum time to
-                                wait for a backend connection to complete.
+                              default: 2s
+                              description: |-
+                                ConnectionTimeout is the maximum amount of time a dial to
+                                the extension server will wait for a connect to complete.
+                                Default: 2 seconds
                               type: string
                             idleConnectionTimeout:
-                              description: IdleConnectionTimeout is the maximum idle
-                                time before closing a keep-alive connection.
+                              default: 60s
+                              description: |-
+                                IdleConnectionTimeout is the maximum amount of time an idle
+                                (keep-alive) connection between the API server and the extension
+                                server will remain idle before closing itself.
+                                Default: 60 seconds
                               type: string
                             keepAlive:
-                              description: KeepAlive specifies the interval between
-                                keep-alive probes for an active connection.
+                              default: 15s
+                              description: |-
+                                KeepAlive specifies the interval between keep-alive probes
+                                for an active network connection between the API server and
+                                the extension server.
+                                Default: 15 seconds
                               type: string
                             maxIdleConnections:
-                              description: MaxIdleConnections controls the maximum
-                                number of idle connections to the backend.
+                              default: 30
+                              description: |-
+                                MaxIdleConnections controls the maximum number of idle (keep-alive)
+                                connections between the API server and the extension server.
+                                Default: 30
                               format: int64
                               type: integer
                             services:
                               description: Services lists the backend service URLs
                                 and cluster mappings.
                               items:
-                                description: Service defines a backend service URL
-                                  and optional cluster mapping for extension routing.
+                                description: ExtensionService defines a backend service
+                                  URL and optional cluster mapping for extension routing.
                                 properties:
                                   cluster:
                                     description: Cluster maps the service to a specific
@@ -698,12 +722,30 @@ spec:
                                     - name
                                     - server
                                     type: object
+                                  headers:
+                                    description: Headers defines custom headers to
+                                      include in requests to the backend.
+                                    items:
+                                      description: Header defines a custom header
+                                        key and value to include in requests to an
+                                        extension backend.
+                                      properties:
+                                        name:
+                                          description: Name is the header key.
+                                          type: string
+                                        value:
+                                          description: Value is the header value.
+                                          type: string
+                                      required:
+                                      - name
+                                      - value
+                                      type: object
+                                    type: array
                                   url:
                                     description: Url is the address where the extension
                                       backend service is available.
                                     type: string
                                 required:
-                                - cluster
                                 - url
                                 type: object
                               type: array
@@ -796,7 +838,7 @@ spec:
                           application:
                             description: Application contains deep links for applications.
                             items:
-                              description: Link defines a UI deep link, with optional
+                              description: DeepLink defines a UI deep link, with optional
                                 conditional display and icon.
                               properties:
                                 description:
@@ -826,7 +868,7 @@ spec:
                           project:
                             description: Project contains deep links for projects.
                             items:
-                              description: Link defines a UI deep link, with optional
+                              description: DeepLink defines a UI deep link, with optional
                                 conditional display and icon.
                               properties:
                                 description:
@@ -856,7 +898,7 @@ spec:
                           resource:
                             description: Resource contains deep links for resources.
                             items:
-                              description: Link defines a UI deep link, with optional
+                              description: DeepLink defines a UI deep link, with optional
                                 conditional display and icon.
                               properties:
                                 description:
@@ -981,7 +1023,7 @@ spec:
             - server
             type: object
           status:
-            description: ConfigurationStatus defines the observed state of Configuration.
+            description: ArgoCDConfigStatus defines the observed state of ArgoCDConfig.
             type: object
         required:
         - metadata

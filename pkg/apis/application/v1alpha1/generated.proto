@@ -806,6 +806,49 @@ message ApplicationWatchEvent {
   optional Application application = 2;
 }
 
+// ArgoCDConfig is the Schema for the argocdconfigs API.
+// +genclient
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:path=argocdconfigs,shortName=argocdconfig;argocdconfigs
+message ArgoCDConfig {
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  optional ArgoCDConfigSpec spec = 2;
+
+  optional ArgoCDConfigStatus status = 3;
+}
+
+// ArgoCDConfigList contains a list of ArgoCDConfig.
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+message ArgoCDConfigList {
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+
+  repeated ArgoCDConfig items = 2;
+}
+
+// ArgoCDConfigSpec defines the desired state of ArgoCDConfig.
+message ArgoCDConfigSpec {
+  optional ResourceCustomizations resourceCustomizations = 1;
+
+  optional Manifests manifests = 2;
+
+  optional ResourceTracking resourceTracking = 3;
+
+  // InstallationID is an optional unique identifier for this Argo CD installation. It is not set by default.
+  optional string installationID = 4;
+
+  optional Server server = 5;
+
+  optional ApplicationConfig application = 6;
+
+  repeated GlobalProject globalProjects = 7;
+}
+
+// ArgoCDConfigStatus defines the observed state of ArgoCDConfig.
+message ArgoCDConfigStatus {
+}
+
 message Authentication {
   optional bool anonymousUsersEnabled = 1;
 
@@ -819,7 +862,7 @@ message Authentication {
 
   repeated Account accounts = 5;
 
-  optional Dex dex = 6;
+  optional DexConfig dex = 6;
 
   optional OIDC oidc = 7;
 }
@@ -830,20 +873,34 @@ message AzureOIDCConfig {
 
 // Backend configures connection parameters and services for an extension backend.
 message Backend {
-  // ConnectionTimeout is the maximum time to wait for a backend connection to complete.
+  // ConnectionTimeout is the maximum amount of time a dial to
+  // the extension server will wait for a connect to complete.
+  // Default: 2 seconds
+  // +kubebuilder:default=`2s`
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration connectionTimeout = 1;
 
-  // KeepAlive specifies the interval between keep-alive probes for an active connection.
+  // KeepAlive specifies the interval between keep-alive probes
+  // for an active network connection between the API server and
+  // the extension server.
+  // Default: 15 seconds
+  // +kubebuilder:default=`15s`
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration keepAlive = 2;
 
-  // IdleConnectionTimeout is the maximum idle time before closing a keep-alive connection.
+  // IdleConnectionTimeout is the maximum amount of time an idle
+  // (keep-alive) connection between the API server and the extension
+  // server will remain idle before closing itself.
+  // Default: 60 seconds
+  // +kubebuilder:default=`60s`
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration idleConnectionTimeout = 3;
 
-  // MaxIdleConnections controls the maximum number of idle connections to the backend.
+  // MaxIdleConnections controls the maximum number of idle (keep-alive)
+  // connections between the API server and the extension server.
+  // Default: 30
+  // +kubebuilder:default=30
   optional int64 maxIdleConnections = 4;
 
   // Services lists the backend service URLs and cluster mappings.
-  repeated Service services = 5;
+  repeated ExtensionService services = 5;
 }
 
 // Backoff is the backoff strategy to use on subsequent retries for failing syncs
@@ -1136,49 +1193,6 @@ message ConfigMapKeyRef {
   optional string key = 2;
 }
 
-// Configuration is the Schema for the configurations API.
-// +genclient
-// +genclient:noStatus
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:path=configurations,shortName=config;configs
-message Configuration {
-  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
-
-  optional ConfigurationSpec spec = 2;
-
-  optional ConfigurationStatus status = 3;
-}
-
-// ConfigurationList contains a list of Configuration.
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-message ConfigurationList {
-  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
-
-  repeated Configuration items = 2;
-}
-
-// ConfigurationSpec defines the desired state of Configuration.
-message ConfigurationSpec {
-  optional ResourceCustomizations resourceCustomizations = 1;
-
-  optional Manifests manifests = 2;
-
-  optional ResourceTracking resourceTracking = 3;
-
-  // InstallationID is an optional unique identifier for this Argo CD installation. It is not set by default.
-  optional string installationID = 4;
-
-  optional Server server = 5;
-
-  optional ApplicationConfig application = 6;
-
-  repeated GlobalProject globalProjects = 7;
-}
-
-// ConfigurationStatus defines the observed state of Configuration.
-message ConfigurationStatus {
-}
-
 // ConnectionState contains information about remote resource connection state, currently used for clusters and repositories
 message ConnectionState {
   // Status contains the current status indicator for the connection
@@ -1191,40 +1205,54 @@ message ConnectionState {
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time attemptedAt = 3;
 }
 
-message Connector {
+message ConnectorConfig {
   optional string type = 1;
 
-  optional string id = 2;
-
-  optional string name = 3;
-
-  optional ConnectorConfig config = 4;
+  optional ConnectorConfigConfig config = 2;
 }
 
-message ConnectorConfig {
-  optional string clientID = 1;
+message ConnectorConfigConfig {
+  optional string redirectURI = 1;
+}
 
-  optional string clientSecret = 2;
+// DeepLink defines a UI deep link, with optional conditional display and icon.
+message DeepLink {
+  // Url is the target URL for the link. Supports Go template expressions.
+  optional string url = 1;
 
-  repeated Org orgs = 3;
+  // Title is the display text for the link.
+  optional string title = 2;
+
+  // Description is an optional description for the link.
+  optional string description = 3;
+
+  // IconClass is an optional icon CSS class for the link.
+  optional string iconClass = 4;
+
+  // If is an optional condition for displaying the link, using expr-lang expressions.
+  optional string if = 5;
 }
 
 // DeepLinks defines project, application, and resource-level deep links for the ArgoCD UI.
 message DeepLinks {
   // Project contains deep links for projects.
-  repeated Link project = 1;
+  repeated DeepLink project = 1;
 
   // Application contains deep links for applications.
-  repeated Link application = 2;
+  repeated DeepLink application = 2;
 
   // Resource contains deep links for resources.
-  repeated Link resource = 3;
+  repeated DeepLink resource = 3;
 }
 
-message Dex {
-  repeated Connector connectors = 1;
+message DexConfig {
+  optional LoggerConfig logger = 4;
 
-  repeated StaticClient staticClients = 2;
+  optional OAuth2Config oauth2 = 7;
+
+  repeated StaticClientConfig staticClients = 8;
+
+  repeated ConnectorConfig connectors = 9;
 }
 
 message Differences {
@@ -1331,6 +1359,18 @@ message Extension {
   optional Backend backend = 2;
 }
 
+// ExtensionService defines a backend service URL and optional cluster mapping for extension routing.
+message ExtensionService {
+  // Url is the address where the extension backend service is available.
+  optional string url = 1;
+
+  // Cluster maps the service to a specific cluster destination.
+  optional ClusterConfiguration cluster = 2;
+
+  // Headers defines custom headers to include in requests to the backend.
+  repeated Header headers = 3;
+}
+
 message FineGrainedInheritance {
   // +kubebuilder:default=false
   optional bool enabled = 1;
@@ -1408,6 +1448,15 @@ message GoogleAnalytics {
   optional string trackingId = 2;
 }
 
+// Header defines a custom header key and value to include in requests to an extension backend.
+message Header {
+  // Name is the header key.
+  optional string name = 1;
+
+  // Value is the header value.
+  optional string value = 2;
+}
+
 message Health {
   optional string group = 1;
 
@@ -1430,15 +1479,6 @@ message HealthStatus {
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time lastTransitionTime = 3;
 }
 
-message Helm {
-  // +kubebuilder:default=true
-  optional bool enabled = 1;
-
-  // ValuesFileSchemes specifies which file schemes to allow for Helm values files. Default allowed schemes are "http" and "https".
-  // +kubebuilder:default={http,https}
-  repeated string valuesFileSchemes = 2;
-}
-
 // HelmFileParameter is a file parameter that's passed to helm template during manifest generation
 message HelmFileParameter {
   // Name is the name of the Helm parameter
@@ -1450,7 +1490,12 @@ message HelmFileParameter {
 
 // HelmOptions holds helm options
 message HelmOptions {
-  repeated string valuesFileSchemes = 1;
+  // +kubebuilder:default=true
+  optional bool enabled = 1;
+
+  // ValuesFileSchemes specifies which file schemes to allow for Helm values files. Default allowed schemes are "http" and "https".
+  // +kubebuilder:default={http,https}
+  repeated string valuesFileSchemes = 2;
 }
 
 // HelmParameter is a parameter that's passed to helm template during manifest generation
@@ -1607,18 +1652,6 @@ message KnownTypeField {
   optional string type = 2;
 }
 
-message Kustomize {
-  // +kubebuilder:default=true
-  optional bool enabled = 1;
-
-  optional string buildOptions = 2;
-
-  // Versions is a list of custom Kustomize versions. Each version must have a unique name.
-  // +listMapKey=name
-  // +listType=map
-  repeated Version versions = 3;
-}
-
 message KustomizeGvk {
   optional string group = 1;
 
@@ -1629,6 +1662,9 @@ message KustomizeGvk {
 
 // KustomizeOptions are options for kustomize to use when building manifests
 message KustomizeOptions {
+  // +kubebuilder:default=true
+  optional bool enabled = 4;
+
   // BuildOptions is a string of build parameters to use when calling `kustomize build`
   optional string buildOptions = 1;
 
@@ -1640,6 +1676,8 @@ message KustomizeOptions {
   optional string binaryPath = 2;
 
   // Versions is a list of Kustomize versions and their corresponding binary paths and build options.
+  // +listMapKey=name
+  // +listType=map
   repeated KustomizeVersion versions = 3;
 }
 
@@ -1698,24 +1736,6 @@ message Labels {
   repeated string exclude = 2;
 }
 
-// Link defines a UI deep link, with optional conditional display and icon.
-message Link {
-  // Url is the target URL for the link. Supports Go template expressions.
-  optional string url = 1;
-
-  // Title is the display text for the link.
-  optional string title = 2;
-
-  // Description is an optional description for the link.
-  optional string description = 3;
-
-  // IconClass is an optional icon CSS class for the link.
-  optional string iconClass = 4;
-
-  // If is an optional condition for displaying the link, using expr-lang expressions.
-  optional string if = 5;
-}
-
 // ListGenerator include items info
 message ListGenerator {
   // +kubebuilder:validation:Optional
@@ -1726,6 +1746,12 @@ message ListGenerator {
   optional string elementsYaml = 3;
 }
 
+message LoggerConfig {
+  optional string level = 1;
+
+  optional string format = 2;
+}
+
 message ManagedNamespaceMetadata {
   map<string, string> labels = 1;
 
@@ -1733,11 +1759,11 @@ message ManagedNamespaceMetadata {
 }
 
 message Manifests {
-  optional Kustomize kustomize = 1;
+  optional KustomizeOptions kustomize = 1;
 
   optional Jsonnet jsonnet = 2;
 
-  optional Helm helm = 3;
+  optional HelmOptions helm = 3;
 }
 
 // MatrixGenerator generates the cartesian product of two sets of parameters. The parameters are defined by two nested
@@ -1788,6 +1814,10 @@ message NestedMergeGenerator {
   repeated ApplicationSetTerminalGenerator generators = 1;
 
   repeated string mergeKeys = 2;
+}
+
+message OAuth2Config {
+  optional bool skipApprovalScreen = 1;
 }
 
 // OCIMetadata contains metadata for a specific revision in an OCI repository
@@ -1899,12 +1929,6 @@ message OptionalMap {
   // Map is the value of a map type parameter.
   // +optional
   map<string, string> map = 1;
-}
-
-message Org {
-  optional string name = 1;
-
-  repeated string teams = 2;
 }
 
 // OrphanedResourceKey is a reference to a resource to be ignored from
@@ -2448,7 +2472,7 @@ message ResourceDiff {
   // Group represents the API group of the resource (e.g., "apps" for Deployments).
   optional string group = 1;
 
-  // Kind represents the Kubernetes resource kind (e.g., "Deployment", "Service").
+  // Kind represents the Kubernetes resource kind (e.g., "Deployment", "ExtensionService").
   optional string kind = 2;
 
   // Namespace specifies the namespace where the resource exists.
@@ -2634,7 +2658,7 @@ message ResourceStatus {
   // Version indicates the API version of the resource (e.g., "v1", "v1beta1").
   optional string version = 2;
 
-  // Kind specifies the type of the resource (e.g., "Deployment", "Service").
+  // Kind specifies the type of the resource (e.g., "Deployment", "ExtensionService").
   optional string kind = 3;
 
   // Namespace defines the Kubernetes namespace where the resource is located.
@@ -2980,15 +3004,6 @@ message Server {
   optional RBAC rbac = 9;
 }
 
-// Service defines a backend service URL and optional cluster mapping for extension routing.
-message Service {
-  // Url is the address where the extension backend service is available.
-  optional string url = 1;
-
-  // Cluster maps the service to a specific cluster destination.
-  optional ClusterConfiguration cluster = 2;
-}
-
 // SignatureKey is the specification of a key required to verify commit signatures with
 message SignatureKey {
   // The ID of the key in hexadecimal notation
@@ -3018,20 +3033,26 @@ message SourceHydratorStatus {
   optional HydrateOperation currentOperation = 2;
 }
 
-message StaticClient {
+message StaticClientConfig {
   optional string id = 1;
 
   optional string name = 2;
 
-  repeated string redirectURIs = 3;
+  optional string secret = 3;
 
-  optional string secret = 4;
+  repeated string redirectURIs = 4;
+
+  optional bool public = 5;
 }
 
 message StatusBadge {
   optional bool enabled = 1;
 
   optional string url = 2;
+}
+
+message StorageConfig {
+  optional string type = 1;
 }
 
 // SuccessfulHydrateOperation contains information about the most recent successful hydrate operation
@@ -3302,12 +3323,14 @@ message Updates {
   repeated Rule rules = 2;
 }
 
-message Version {
-  optional string name = 1;
+message WebConfig {
+  optional string http = 1;
 
-  optional string path = 2;
+  optional string https = 2;
 
-  optional string buildOptions = 3;
+  optional string tlsCert = 3;
+
+  optional string tlsKey = 4;
 }
 
 // Webhook configures the webhook server settings.

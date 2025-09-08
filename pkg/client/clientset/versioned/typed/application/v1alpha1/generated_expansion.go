@@ -8,4 +8,4 @@ type ApplicationExpansion interface{}
 
 type ApplicationSetExpansion interface{}
 
-type ConfigurationExpansion interface{}
+type ArgoCDConfigExpansion interface{}

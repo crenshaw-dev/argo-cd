@@ -24,8 +24,8 @@ func (c *FakeArgoprojV1alpha1) ApplicationSets(namespace string) v1alpha1.Applic
 	return newFakeApplicationSets(c, namespace)
 }
 
-func (c *FakeArgoprojV1alpha1) Configurations(namespace string) v1alpha1.ConfigurationInterface {
-	return newFakeConfigurations(c, namespace)
+func (c *FakeArgoprojV1alpha1) ArgoCDConfigs(namespace string) v1alpha1.ArgoCDConfigInterface {
+	return newFakeArgoCDConfigs(c, namespace)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

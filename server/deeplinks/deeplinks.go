@@ -13,7 +13,6 @@ import (
 
 	"github.com/argoproj/argo-cd/v3/pkg/apiclient/application"
 	"github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
-	"github.com/argoproj/argo-cd/v3/util/settings"
 )
 
 var sprigFuncMap = sprig.GenericFuncMap() // a singleton for better performance
@@ -80,14 +79,14 @@ func CreateDeepLinksObject(resourceObj *unstructured.Unstructured, app *unstruct
 	return deeplinkObj
 }
 
-func EvaluateDeepLinksResponse(obj map[string]any, name string, links []settings.DeepLink) (*application.LinksResponse, []string) {
+func EvaluateDeepLinksResponse(obj map[string]any, name string, links []v1alpha1.DeepLink) (*application.LinksResponse, []string) {
 	finalLinks := []*application.LinkInfo{}
 	errors := []string{}
 	for _, link := range links {
-		if link.Condition != nil {
-			out, err := expr.Eval(*link.Condition, obj)
+		if link.If != "" {
+			out, err := expr.Eval(link.If, obj)
 			if err != nil {
-				errors = append(errors, fmt.Sprintf("failed to evaluate link condition '%v' with resource %v, error=%v", *link.Condition, name, err.Error()))
+				errors = append(errors, fmt.Sprintf("failed to evaluate link condition '%v' with resource %v, error=%v", link.If, name, err.Error()))
 				continue
 			}
 			switch condResult := out.(type) {
@@ -96,28 +95,28 @@ func EvaluateDeepLinksResponse(obj map[string]any, name string, links []settings
 					continue
 				}
 			default:
-				errors = append(errors, fmt.Sprintf("link condition '%v' evaluated to non-boolean value for resource %v", *link.Condition, name))
+				errors = append(errors, fmt.Sprintf("link condition '%v' evaluated to non-boolean value for resource %v", link.If, name))
 				continue
 			}
 		}
 
-		t, err := template.New("deep-link").Funcs(sprigFuncMap).Parse(link.URL)
+		t, err := template.New("deep-link").Funcs(sprigFuncMap).Parse(link.Url)
 		if err != nil {
-			errors = append(errors, fmt.Sprintf("failed to parse link template '%v', error=%v", link.URL, err.Error()))
+			errors = append(errors, fmt.Sprintf("failed to parse link template '%v', error=%v", link.Url, err.Error()))
 			continue
 		}
 		finalURL := bytes.Buffer{}
 		err = t.Execute(&finalURL, obj)
 		if err != nil {
-			errors = append(errors, fmt.Sprintf("failed to evaluate link template '%v' with resource %v, error=%v", link.URL, name, err.Error()))
+			errors = append(errors, fmt.Sprintf("failed to evaluate link template '%v' with resource %v, error=%v", link.Url, name, err.Error()))
 			continue
 		}
 
 		finalLinks = append(finalLinks, &application.LinkInfo{
 			Title:       ptr.To(link.Title),
 			Url:         ptr.To(finalURL.String()),
-			Description: link.Description,
-			IconClass:   link.IconClass,
+			Description: ptr.To(link.Description),
+			IconClass:   ptr.To(link.IconClass),
 		})
 	}
 	return &application.LinksResponse{

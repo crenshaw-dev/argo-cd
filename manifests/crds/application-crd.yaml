@@ -4767,7 +4767,7 @@ spec:
                       type: boolean
                     kind:
                       description: Kind specifies the type of the resource (e.g.,
-                        "Deployment", "Service").
+                        "Deployment", "ExtensionService").
                       type: string
                     name:
                       description: Name is the unique name of the resource within
