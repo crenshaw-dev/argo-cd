@@ -89,9 +89,14 @@ jobs:
           $SIGNOFF" \
               --base "$TARGET_BRANCH" \
               --head "$CHERRY_PICK_BRANCH" 2>&1)
+          
+            echo "Debug: PR_URL output: $PR_URL"
+          
             if echo "$PR_URL" | grep -q '^https://'; then
+              echo "🔗 Created PR: $PR_URL"
               PR_LINKS+=("$VERSION_NUMBER: $PR_URL")
             else
+              echo "❌ Failed to create PR: $PR_URL"
               SANITIZED_ERROR=$(echo "$PR_URL" | tr '\n' ' ')
               PR_ERRORS+=("$VERSION_NUMBER: $SANITIZED_ERROR")
             fi
