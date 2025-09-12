@@ -34,41 +34,46 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Cherry pick commit
+      - name: Cherry pick commit and create PRs
         id: cherry-pick
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
           set -e
 
           # Extract data directly from GitHub event context
           MERGE_COMMIT="${{ github.event.pull_request.merge_commit_sha }}"
           
-          # Extract target branch from labels
-          if [[ "${{ github.event.action }}" == "labeled" ]]; then
-            # Label was just added - use it directly
-            CHERRY_PICK_LABEL="${{ github.event.label.name }}"
-          else
-            # PR was closed - find cherry-pick label from all labels
-            CHERRY_PICK_LABEL=$(echo '${{ toJSON(github.event.pull_request.labels) }}' | jq -r '.[] | select(.name | startswith("cherry-pick/")) | .name' | head -1)
-          fi
+          # Collect all cherry-pick/x.y labels
+          CHERRY_PICK_LABELS=$(echo '${{ toJSON(github.event.pull_request.labels) }}' | jq -r '.[] | select(.name | startswith("cherry-pick/")) | .name')
+
+          PR_LINKS=()
+          PR_ERRORS=()
+
+          for CHERRY_PICK_LABEL in $CHERRY_PICK_LABELS; do
+            VERSION_NUMBER="${CHERRY_PICK_LABEL#cherry-pick/}"
+            TARGET_BRANCH="release-$VERSION_NUMBER"  # Remove 'cherry-pick/' prefix with `release-` prefix
           
-          VERSION_NUMBER="${CHERRY_PICK_LABEL#cherry-pick/}"
-          echo "version_number=$VERSION_NUMBER" >> "$GITHUB_OUTPUT"
-          TARGET_BRANCH="release-$VERSION_NUMBER"  # Remove 'cherry-pick/' prefix with `release-` prefix
+            echo "🍒 Cherry-picking commit $MERGE_COMMIT to branch $TARGET_BRANCH"
+
+            # Check if target branch exists
+            if ! git show-ref --verify --quiet "refs/remotes/origin/$TARGET_BRANCH"; then
+              echo "❌ Target branch '$TARGET_BRANCH' does not exist"
+              PR_ERRORS+=("$VERSION_NUMBER: Target branch '$TARGET_BRANCH' does not exist")
+              continue
+            fi
+
+            # Create new branch for cherry-pick
+            CHERRY_PICK_BRANCH="cherry-pick-${{ github.event.pull_request.number }}-to-${TARGET_BRANCH}"
+            git checkout -b "$CHERRY_PICK_BRANCH" "origin/$TARGET_BRANCH"
           
-          echo "🍒 Cherry-picking commit $MERGE_COMMIT to branch $TARGET_BRANCH"
+            # Perform cherry-pick
+            if ! git cherry-pick -m 1 "$MERGE_COMMIT"; then
+              PR_ERRORS+=("$VERSION_NUMBER: Cherry-pick failed due to conflicts")
+              git cherry-pick --abort || true
+              continue
+            fi
           
-          # Check if target branch exists
-          if ! git show-ref --verify --quiet "refs/remotes/origin/$TARGET_BRANCH"; then
-            echo "❌ Target branch '$TARGET_BRANCH' does not exist"
-            exit 1
-          fi
-          
-          # Create new branch for cherry-pick
-          CHERRY_PICK_BRANCH="cherry-pick-${{ github.event.pull_request.number }}-to-${TARGET_BRANCH}"
-          git checkout -b "$CHERRY_PICK_BRANCH" "origin/$TARGET_BRANCH"
-          
-          # Perform cherry-pick
-          if git cherry-pick -m 1 "$MERGE_COMMIT"; then
             echo "✅ Cherry-pick successful"
 
             # Extract Signed-off-by from the cherry-pick commit
@@ -76,38 +81,56 @@ jobs:
 
             # Push the new branch
             git push origin "$CHERRY_PICK_BRANCH"
+        
+            # Create Pull Request
+            PR_URL=$(gh pr create \
+              --title "${{ github.event.pull_request.title }} (cherry-pick #${{ github.event.pull_request.number }} for $VERSION_NUMBER)" \
+              --body "Cherry-picked ${{ github.event.pull_request.title }} (#${{ github.event.pull_request.number }})
+          $SIGNOFF" \
+              --base "$TARGET_BRANCH" \
+              --head "$CHERRY_PICK_BRANCH" 2>&1)
+            if echo "$PR_URL" | grep -q '^https://'; then
+              PR_LINKS+=("$VERSION_NUMBER: $PR_URL")
+            else
+              SANITIZED_ERROR=$(echo "$PR_URL" | tr '\n' ' ')
+              PR_ERRORS+=("$VERSION_NUMBER: $SANITIZED_ERROR")
+            fi
+          done
 
-            # Save data for PR creation
-            echo "branch_name=$CHERRY_PICK_BRANCH" >> "$GITHUB_OUTPUT"
-            echo "signoff=$SIGNOFF" >> "$GITHUB_OUTPUT"
-            echo "target_branch=$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
-          else
-            echo "❌ Cherry-pick failed due to conflicts"
-            git cherry-pick --abort
-            exit 1
-          fi
+          {
+            echo "pr_links<<EOF"
+            printf "%s\n" "${PR_LINKS[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Create Pull Request
+          {
+            echo "pr_errors<<EOF"
+            printf "%s\n" "${PR_ERRORS[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Comment with cherry-pick results
+        if: steps.cherry-pick.outputs.pr_links != '' || steps.cherry-pick.outputs.pr_errors != ''
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
-          # Create cherry-pick PR
-          gh pr create \
-            --title "${{ github.event.pull_request.title }} (cherry-pick #${{ github.event.pull_request.number }} for ${{ steps.cherry-pick.outputs.version_number }})" \
-            --body "Cherry-picked ${{ github.event.pull_request.title }} (#${{ github.event.pull_request.number }})
-
-          ${{ steps.cherry-pick.outputs.signoff }}" \
-            --base "${{ steps.cherry-pick.outputs.target_branch }}" \
-            --head "${{ steps.cherry-pick.outputs.branch_name }}"
+          LOGS_URL="https://github.com/argoproj/argo-cd/actions/runs/${GITHUB_RUN_ID}"
           
-          # Comment on original PR
-          gh pr comment ${{ github.event.pull_request.number }} \
-            --body "🍒 Cherry-pick PR created: #$(gh pr list --head ${{ steps.cherry-pick.outputs.branch_name }} --json number --jq '.[0].number')"
-        env:
-          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
-
-      - name: Comment on failure
-        if: failure()
-        run: |
-          gh pr comment ${{ github.event.pull_request.number }} \
-            --body "❌ Cherry-pick failed. Please check the workflow logs for details."
-        env:
-          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+          COMMENT="### Cherry-pick Results\n"
+          if [ -n "${{ steps.cherry_pick.outputs.pr_links }}" ]; then
+            COMMENT+="**Created PRs:**\n"
+            while read -r line; do
+              [ -z "$line" ] && continue
+              VERSION_NUMBER=$(echo "$line" | cut -d: -f1)
+              URL=$(echo "$line" | cut -d: -f2-)
+              COMMENT+="- [$VERSION_NUMBER]($URL)\n"
+            done <<< "${{ steps.cherry-pick.outputs.pr_links }}"
+          fi
+          if [ -n "${{ steps.cherry-pick.outputs.pr_errors }}" ]; then
+            COMMENT+="\n**Errors:**\n"
+            while read -r line; do
+              [ -z "$line" ] && continue
+              COMMENT+="- $line ([logs]($LOGS_URL))\n"
+            done <<< "${{ steps.cherry-pick.outputs.pr_errors }}"
+          fi
+          gh pr comment "${{ github.event.pull_request.number }}" --body "$COMMENT"
