@@ -135,10 +135,10 @@ jobs:
           fi
           gh pr comment "${{ github.event.pull_request.number }}" --body "$(echo -e "$COMMENT")"
           
-          # Check if there are any errors and exit with a non-zero code
-          if [ "${#PR_ERRORS[@]}" -gt 0 ]; then
+          # Exit with a non-zero code if there are errors
+          if [ -n "${{ steps.cherry-pick.outputs.pr_errors }}" ]; then
             echo "Errors occurred during the cherry-pick process:"
-            printf "%s\n" "${PR_ERRORS[@]}"
+            echo "${{ steps.cherry-pick.outputs.pr_errors }}"
             exit 1
           fi
           
