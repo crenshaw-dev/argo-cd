@@ -133,4 +133,21 @@ jobs:
               COMMENT+="- $line ([logs]($LOGS_URL))\n"
             done <<< "${{ steps.cherry-pick.outputs.pr_errors }}"
           fi
-          gh pr comment "${{ github.event.pull_request.number }}" --body "$COMMENT"
+          gh pr comment "${{ github.event.pull_request.number }}" --body "$(echo -e "$COMMENT")"
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
