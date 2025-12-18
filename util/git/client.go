@@ -1163,7 +1163,7 @@ func (m *nativeGitClient) AddAndPushNote(sha string, namespace string, note stri
 
 		// Fetch the latest notes BEFORE adding to merge concurrent updates
 		// Use + prefix to force update local ref (safe because we want latest remote notes)
-		_, fetchErr := m.runCmd(ctx, "fetch", "origin", fmt.Sprintf("+%s:%s", notesRef, notesRef))
+		fetchErr := m.runCredentialedCmd(ctx, "fetch", "origin", fmt.Sprintf("+%s:%s", notesRef, notesRef))
 		// Ignore "couldn't find remote ref" errors (notes don't exist yet - first time)
 		if fetchErr != nil && !strings.Contains(fetchErr.Error(), "couldn't find remote ref") {
 			log.Debugf("Failed to fetch notes (will continue): %v", fetchErr)
