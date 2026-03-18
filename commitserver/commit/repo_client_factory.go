@@ -1,6 +1,8 @@
 package commit
 
 import (
+	log "github.com/sirupsen/logrus"
+
 	"github.com/argoproj/argo-cd/v3/commitserver/metrics"
 	"github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/argoproj/argo-cd/v3/util/git"
@@ -8,7 +10,7 @@ import (
 
 // RepoClientFactory is a factory for creating git clients for a repository.
 type RepoClientFactory interface {
-	NewClient(repo *v1alpha1.Repository, rootPath string) (git.Client, error)
+	NewClient(logCtx *log.Entry, repo *v1alpha1.Repository, rootPath string) (git.Client, error)
 }
 
 type repoClientFactory struct {
@@ -25,8 +27,9 @@ func NewRepoClientFactory(gitCredsStore git.CredsStore, metricsServer *metrics.S
 }
 
 // NewClient creates a new git client for the repository.
-func (r *repoClientFactory) NewClient(repo *v1alpha1.Repository, rootPath string) (git.Client, error) {
+func (r *repoClientFactory) NewClient(logCtx *log.Entry, repo *v1alpha1.Repository, rootPath string) (git.Client, error) {
 	gitCreds := repo.GetGitCreds(r.gitCredsStore)
+	logCtx.WithField("credentialType", getCredentialType(repo)).Debug("Creating git client with credentials")
 	opts := git.WithEventHandlers(metrics.NewGitClientEventHandlers(r.metricsServer))
 	return git.NewClientExt(repo.Repo, rootPath, gitCreds, repo.IsInsecure(), repo.IsLFSEnabled(), repo.Proxy, repo.NoProxy, opts)
 }

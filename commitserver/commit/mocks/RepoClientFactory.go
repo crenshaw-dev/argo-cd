@@ -7,6 +7,7 @@ package mocks
 import (
 	"github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/argoproj/argo-cd/v3/util/git"
+	log "github.com/sirupsen/logrus"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -38,7 +39,7 @@ func (_m *RepoClientFactory) EXPECT() *RepoClientFactory_Expecter {
 }
 
 // NewClient provides a mock function for the type RepoClientFactory
-func (_mock *RepoClientFactory) NewClient(repo *v1alpha1.Repository, rootPath string) (git.Client, error) {
+func (_mock *RepoClientFactory) NewClient(logCtx *log.Entry, repo *v1alpha1.Repository, rootPath string) (git.Client, error) {
 	ret := _mock.Called(repo, rootPath)
 
 	if len(ret) == 0 {

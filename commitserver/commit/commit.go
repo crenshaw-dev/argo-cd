@@ -242,7 +242,7 @@ func (s *Service) initGitClient(logCtx *log.Entry, r *apiclient.CommitHydratedMa
 		}
 	}
 
-	gitClient, err := s.repoClientFactory.NewClient(r.Repo, dirPath)
+	gitClient, err := s.repoClientFactory.NewClient(nil, r.Repo, dirPath)
 	if err != nil {
 		cleanupOrLog()
 		return nil, "", nil, fmt.Errorf("failed to create git client: %w", err)
