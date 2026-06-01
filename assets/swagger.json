@@ -1752,6 +1752,12 @@
             "description": "versionId from historical data (for multi source apps).",
             "name": "versionId",
             "in": "query"
+          },
+          {
+            "type": "boolean",
+            "description": "For source hydrator apps, resolve metadata from the dry source repository instead of the sync source.\nMutually exclusive with versionId. Defaults to false (sync source).",
+            "name": "drySource",
+            "in": "query"
           }
         ],
         "responses": {
@@ -1816,6 +1822,12 @@
             "description": "versionId from historical data (for multi source apps).",
             "name": "versionId",
             "in": "query"
+          },
+          {
+            "type": "boolean",
+            "description": "For source hydrator apps, resolve metadata from the dry source repository instead of the sync source.\nMutually exclusive with versionId. Defaults to false (sync source).",
+            "name": "drySource",
+            "in": "query"
           }
         ],
         "responses": {
@@ -1879,6 +1891,12 @@
             "format": "int32",
             "description": "versionId from historical data (for multi source apps).",
             "name": "versionId",
+            "in": "query"
+          },
+          {
+            "type": "boolean",
+            "description": "For source hydrator apps, resolve metadata from the dry source repository instead of the sync source.\nMutually exclusive with versionId. Defaults to false (sync source).",
+            "name": "drySource",
             "in": "query"
           }
         ],

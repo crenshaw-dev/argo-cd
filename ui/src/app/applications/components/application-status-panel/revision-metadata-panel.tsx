@@ -3,13 +3,13 @@ import * as React from 'react';
 import {Timestamp} from '../../../shared/components/timestamp';
 import {services} from '../../../shared/services';
 
-export const RevisionMetadataPanel = (props: {appName: string; appNamespace: string; type: string; revision: string; versionId: number}) => {
+export const RevisionMetadataPanel = (props: {appName: string; appNamespace: string; type: string; revision: string; versionId?: number | null; drySource?: boolean}) => {
     if (props.type === 'helm') {
         return null;
     }
     if (props.type === 'oci') {
         return (
-            <DataLoader load={() => services.applications.ociMetadata(props.appName, props.appNamespace, props.revision, 0, props.versionId)} errorRenderer={() => <div />}>
+            <DataLoader load={() => services.applications.ociMetadata(props.appName, props.appNamespace, props.revision, 0, props.versionId ?? null)} errorRenderer={() => <div />}>
                 {m => (
                     <Tooltip
                         popperOptions={{
@@ -53,7 +53,7 @@ export const RevisionMetadataPanel = (props: {appName: string; appNamespace: str
     return (
         <DataLoader
             key={props.revision}
-            load={() => services.applications.revisionMetadata(props.appName, props.appNamespace, props.revision, 0, props.versionId)}
+            load={() => services.applications.revisionMetadata(props.appName, props.appNamespace, props.revision, 0, props.versionId ?? null, props.drySource)}
             errorRenderer={() => <div />}>
             {m => (
                 <Tooltip

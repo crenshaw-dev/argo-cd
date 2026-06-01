@@ -591,6 +591,9 @@ Are you sure you want to disable auto-sync and rollback application '${props.mat
                 cont.push(getContentForNonChart(revision, null, getAppCurrentVersion(application), 0, source));
             }
             return <>{cont}</>;
+        } else if (application.spec.sourceHydrator) {
+            cont.push(getContentForNonChart(revision, null, null, 0, source));
+            return <>{cont}</>;
         } else {
             return (
                 <div className='white-box' style={{marginTop: '1.5em'}}>

@@ -59,6 +59,12 @@ describe('RevisionMetadataPanel', () => {
     it('calls revisionMetadata service for git type', () => {
         const {services} = require('../../../shared/services');
         renderer.create(<RevisionMetadataPanel {...defaultProps} type='git' />);
-        expect(services.applications.revisionMetadata).toHaveBeenCalledWith('test-app', 'default', 'abc123', 0, 1);
+        expect(services.applications.revisionMetadata).toHaveBeenCalledWith('test-app', 'default', 'abc123', 0, 1, undefined);
+    });
+
+    it('passes drySource to revisionMetadata service', () => {
+        const {services} = require('../../../shared/services');
+        renderer.create(<RevisionMetadataPanel appName='test-app' appNamespace='default' revision='abc123' type='git' drySource={true} />);
+        expect(services.applications.revisionMetadata).toHaveBeenCalledWith('test-app', 'default', 'abc123', 0, null, true);
     });
 });

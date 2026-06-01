@@ -273,7 +273,7 @@ export const ApplicationStatusPanel = ({application, showDiff, showOperation, sh
                                 appNamespace={application.metadata.namespace}
                                 type={''}
                                 revision={application.status.sourceHydrator.currentOperation.drySHA}
-                                versionId={utils.getAppCurrentVersion(application)}
+                                drySource={true}
                             />
                         )}
                     </div>

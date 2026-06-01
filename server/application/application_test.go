@@ -5168,3 +5168,60 @@ func TestGetUnstructuredLiveResourceOrAppWithImpersonation(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "system:serviceaccount:"+test.FakeDestNamespace+":test-sa", config.Impersonate.UserName)
 }
+
+func Test_getAppSourceBySourceIndexAndVersionId_drySource(t *testing.T) {
+	t.Parallel()
+
+	dryRepo := "https://example.com/dry.git"
+	hydratedRepo := "https://example.com/hydrated.git"
+
+	app := &v1alpha1.Application{
+		Spec: v1alpha1.ApplicationSpec{
+			SourceHydrator: &v1alpha1.SourceHydrator{
+				DrySource: v1alpha1.DrySource{
+					RepoURL:        dryRepo,
+					TargetRevision: "main",
+					Path:           "guestbook",
+				},
+				SyncSource: v1alpha1.SyncSource{
+					RepoURL:      hydratedRepo,
+					TargetBranch: "env/test",
+					Path:         "guestbook-output",
+				},
+			},
+		},
+		Status: v1alpha1.ApplicationStatus{
+			History: []v1alpha1.RevisionHistory{
+				{
+					ID: 1,
+					Source: v1alpha1.ApplicationSource{
+						RepoURL:        "https://example.com/hydrated-v1.git",
+						TargetRevision: "env/test",
+						Path:           "guestbook-output",
+					},
+					Revision: "abc123",
+				},
+			},
+		},
+	}
+
+	syncSource := app.Spec.SourceHydrator.GetSyncSource()
+	drySource := app.Spec.SourceHydrator.GetDrySource()
+	historicalSyncSource := app.Status.History[0].Source
+	versionID := int32(1)
+
+	dryResult, err := getAppSourceBySourceIndexAndVersionId(app, nil, nil, true)
+	require.NoError(t, err)
+	assert.Equal(t, drySource, dryResult)
+
+	defaultResult, err := getAppSourceBySourceIndexAndVersionId(app, nil, nil, false)
+	require.NoError(t, err)
+	assert.Equal(t, syncSource, defaultResult)
+
+	historicalResult, err := getAppSourceBySourceIndexAndVersionId(app, nil, &versionID, false)
+	require.NoError(t, err)
+	assert.Equal(t, historicalSyncSource, historicalResult)
+
+	_, err = getAppSourceBySourceIndexAndVersionId(app, nil, &versionID, true)
+	require.EqualError(t, err, "drySource and versionId are mutually exclusive")
+}

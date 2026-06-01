@@ -1654,7 +1654,7 @@ func (s *Server) RevisionMetadata(ctx context.Context, q *application.RevisionMe
 		return nil, err
 	}
 
-	source, err := getAppSourceBySourceIndexAndVersionId(a, q.SourceIndex, q.VersionId)
+	source, err := getAppSourceBySourceIndexAndVersionId(a, q.SourceIndex, q.VersionId, q.GetDrySource())
 	if err != nil {
 		return nil, fmt.Errorf("error getting app source by source index and version ID: %w", err)
 	}
@@ -1685,7 +1685,7 @@ func (s *Server) RevisionChartDetails(ctx context.Context, q *application.Revisi
 		return nil, err
 	}
 
-	source, err := getAppSourceBySourceIndexAndVersionId(a, q.SourceIndex, q.VersionId)
+	source, err := getAppSourceBySourceIndexAndVersionId(a, q.SourceIndex, q.VersionId, false)
 	if err != nil {
 		return nil, fmt.Errorf("error getting app source by source index and version ID: %w", err)
 	}
@@ -1715,7 +1715,7 @@ func (s *Server) GetOCIMetadata(ctx context.Context, q *application.RevisionMeta
 		return nil, err
 	}
 
-	source, err := getAppSourceBySourceIndexAndVersionId(a, q.SourceIndex, q.VersionId)
+	source, err := getAppSourceBySourceIndexAndVersionId(a, q.SourceIndex, q.VersionId, false)
 	if err != nil {
 		return nil, fmt.Errorf("error getting app source by source index and version ID: %w", err)
 	}
@@ -1742,19 +1742,44 @@ func (s *Server) GetOCIMetadata(ctx context.Context, q *application.RevisionMeta
 // we use the source(s) currently configured for the app. If the version ID is specified, we find the source for that
 // version ID. If the version ID is not found, we return an error. If the source index is out of bounds for whichever
 // source we choose (configured sources or sources for a specific version), we return an error.
-func getAppSourceBySourceIndexAndVersionId(a *v1alpha1.Application, sourceIndexMaybe *int32, versionIdMaybe *int32) (v1alpha1.ApplicationSource, error) {
-	// Start with all the app's configured sources.
-	sources := a.Spec.GetSources()
+// For source hydrator apps, drySource selects the dry repository instead of the sync (hydrated) repository.
+// drySource and versionId are mutually exclusive: use versionId to resolve the sync source recorded in revision
+// history, or drySource to resolve the current dry source from spec.
+func getAppSourceBySourceIndexAndVersionId(a *v1alpha1.Application, sourceIndexMaybe *int32, versionIdMaybe *int32, drySource bool) (v1alpha1.ApplicationSource, error) {
+	if versionIdMaybe != nil && drySource {
+		return v1alpha1.ApplicationSource{}, fmt.Errorf("drySource and versionId are mutually exclusive")
+	}
 
-	// If the user specified a version, get the sources for that version. If the version is not found, return an error.
+	if drySource {
+		if a.Spec.SourceHydrator == nil {
+			return v1alpha1.ApplicationSource{}, fmt.Errorf("drySource is only valid for source hydrator apps")
+		}
+		return a.Spec.SourceHydrator.GetDrySource(), nil
+	}
+
 	if versionIdMaybe != nil {
 		versionId := int64(*versionIdMaybe)
-		var err error
-		sources, err = getSourcesByVersionId(a, versionId)
+		sources, err := getSourcesByVersionId(a, versionId)
 		if err != nil {
 			return v1alpha1.ApplicationSource{}, fmt.Errorf("error getting source by version ID: %w", err)
 		}
+
+		sourceIndex := 0
+		if sourceIndexMaybe != nil {
+			sourceIndex = int(*sourceIndexMaybe)
+			if sourceIndex >= len(sources) {
+				if len(sources) == 1 {
+					return v1alpha1.ApplicationSource{}, fmt.Errorf("source index %d not found because there is only 1 source", sourceIndex)
+				}
+				return v1alpha1.ApplicationSource{}, fmt.Errorf("source index %d not found because there are only %d sources", sourceIndex, len(sources))
+			}
+		}
+
+		return sources[sourceIndex], nil
 	}
+
+	// Start with all the app's configured sources.
+	sources := a.Spec.GetSources()
 
 	// Start by assuming we want the first source.
 	sourceIndex := 0

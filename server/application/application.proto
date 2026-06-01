@@ -55,6 +55,9 @@ message RevisionMetadataQuery{
 	optional int32 sourceIndex = 5;
 	// versionId from historical data (for multi source apps)
 	optional int32 versionId = 6;
+	// For source hydrator apps, resolve metadata from the dry source repository instead of the sync source.
+	// Mutually exclusive with versionId. Defaults to false (sync source).
+	optional bool drySource = 7;
 }
 
 // ApplicationEventsQuery is a query for application resource events
