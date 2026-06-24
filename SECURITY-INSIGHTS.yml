@@ -3,7 +3,7 @@ header:
   expiration-date: '2024-10-31T00:00:00.000Z' # One year from initial release.
   last-updated: '2023-10-27'
   last-reviewed: '2023-10-27'
-  commit-hash: ddea9e7128ecce09318352de8fd9b9ab88afaf47
+  commit-hash: b93fffb72f2ec72a9295d1a4a9752ff897487e5d
   project-url: https://github.com/argoproj/argo-cd
   project-release: v3.6.0
   changelog: https://github.com/argoproj/argo-cd/releases
