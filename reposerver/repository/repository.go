@@ -61,6 +61,7 @@ import (
 	apppathutil "github.com/argoproj/argo-cd/v3/util/app/path"
 	"github.com/argoproj/argo-cd/v3/util/argo"
 	"github.com/argoproj/argo-cd/v3/util/cmp"
+	"github.com/argoproj/argo-cd/v3/util/configbus"
 	"github.com/argoproj/argo-cd/v3/util/git"
 	"github.com/argoproj/argo-cd/v3/util/glob"
 	"github.com/argoproj/argo-cd/v3/util/grpc"
@@ -102,8 +103,9 @@ type Service struct {
 	metricsServer             *metrics.MetricsServer
 	newOCIClient              func(repoURL string, creds oci.Creds, proxy string, noProxy string, mediaTypes []string, opts ...oci.ClientOpts) (oci.Client, error)
 	newGitClient              func(rawRepoURL string, root string, creds git.Creds, insecure bool, enableLfs bool, proxy string, noProxy string, opts ...git.ClientOpts) (git.Client, error)
-	newHelmClient             func(repoURL string, creds helm.Creds, enableOci bool, proxy string, noProxy string, opts ...helm.ClientOpts) helm.Client
+	newHelmClient             func(repoURL string, creds helm.Creds, enableOci bool, proxy string, noProxy string, opts ...helm.ClientOpts) (helm.Client, error)
 	initConstants             RepoServerInitConstants
+	configProvider            configbus.Provider
 	// stores cached symlink validation results
 	symlinksState *gocache.Cache
 	// now is usually just time.Now, but may be replaced by unit tests for testing purposes
@@ -111,56 +113,67 @@ type Service struct {
 }
 
 type RepoServerInitConstants struct {
-	OCIMediaTypes                                []string
-	ParallelismLimit                             int64
+	// Deprecated: use configProvider.OCIMediaTypes.
+	OCIMediaTypes []string
+	// Deprecated: use configProvider.ParallelismLimit.
+	ParallelismLimit int64
+	// Deprecated: use configProvider.PauseGenerationAfterFailedGenerationAttempts.
 	PauseGenerationAfterFailedGenerationAttempts int
-	PauseGenerationOnFailureForMinutes           int
-	PauseGenerationOnFailureForRequests          int
-	SubmoduleEnabled                             bool
-	MaxCombinedDirectoryManifestsSize            resource.Quantity
-	CMPTarExcludedGlobs                          []string
-	AllowOutOfBoundsSymlinks                     bool
-	StreamedManifestMaxExtractedSize             int64
-	StreamedManifestMaxTarSize                   int64
-	HelmManifestMaxExtractedSize                 int64
-	HelmRegistryMaxIndexSize                     int64
-	OCIManifestMaxExtractedSize                  int64
-	DisableOCIManifestMaxExtractedSize           bool
-	DisableHelmManifestMaxExtractedSize          bool
-	IncludeHiddenDirectories                     bool
-	CMPUseManifestGeneratePaths                  bool
-	EnableBuiltinGitConfig                       bool
-	HelmUserAgent                                string
-	HelmChartCacheExpiration                     time.Duration // Cache expiration for repo
+	// Deprecated: use configProvider.PauseGenerationOnFailureForMinutes.
+	PauseGenerationOnFailureForMinutes int
+	// Deprecated: use configProvider.PauseGenerationOnFailureForRequests.
+	PauseGenerationOnFailureForRequests int
+	// Deprecated: use configProvider.SubmoduleEnabled.
+	SubmoduleEnabled bool
+	// Deprecated: use configProvider.MaxCombinedDirectoryManifestsSize.
+	MaxCombinedDirectoryManifestsSize resource.Quantity
+	// Deprecated: use configProvider.CMPTarExcludedGlobs.
+	CMPTarExcludedGlobs []string
+	// Deprecated: use configProvider.AllowOutOfBoundsSymlinks.
+	AllowOutOfBoundsSymlinks bool
+	// Deprecated: use configProvider.StreamedManifestMaxExtractedSize.
+	StreamedManifestMaxExtractedSize int64
+	// Deprecated: use configProvider.StreamedManifestMaxTarSize.
+	StreamedManifestMaxTarSize int64
+	// Deprecated: use configProvider.HelmManifestMaxExtractedSize.
+	HelmManifestMaxExtractedSize int64
+	// Deprecated: use configProvider.HelmRegistryMaxIndexSize.
+	HelmRegistryMaxIndexSize int64
+	// Deprecated: use configProvider.OCIManifestMaxExtractedSize.
+	OCIManifestMaxExtractedSize int64
+	// Deprecated: use configProvider.DisableOCIManifestMaxExtractedSize.
+	DisableOCIManifestMaxExtractedSize bool
+	// Deprecated: use configProvider.DisableHelmManifestMaxExtractedSize.
+	DisableHelmManifestMaxExtractedSize bool
+	// Deprecated: use configProvider.IncludeHiddenDirectories.
+	IncludeHiddenDirectories bool
+	// Deprecated: use configProvider.CMPUseManifestGeneratePaths.
+	CMPUseManifestGeneratePaths bool
+	// Deprecated: use configProvider.EnableBuiltinGitConfig.
+	EnableBuiltinGitConfig bool
+	// Deprecated: use configProvider.HelmUserAgent.
+	HelmUserAgent string
+	// Deprecated: use configProvider.HelmChartCacheExpiration.
+	HelmChartCacheExpiration time.Duration // Cache expiration for repo
 }
 
 var manifestGenerateLock = sync.NewKeyLock()
 
 // NewService returns a new instance of the Manifest service
 func NewService(metricsServer *metrics.MetricsServer, cache *cache.Cache, initConstants RepoServerInitConstants, gitCredsStore git.CredsStore, rootDir string) *Service {
-	var parallelismLimitSemaphore *semaphore.Weighted
-	if initConstants.ParallelismLimit > 0 {
-		parallelismLimitSemaphore = semaphore.NewWeighted(initConstants.ParallelismLimit)
+	if cache == nil {
+		panic("reposerver NewService requires a non-nil cache")
 	}
 	repoLock := NewRepositoryLock()
 	gitRandomizedPaths := utilio.NewRandomizedTempPaths(rootDir)
 	helmRandomizedPaths := utilio.NewRandomizedTempPaths(rootDir)
 	ociRandomizedPaths := utilio.NewRandomizedTempPaths(rootDir)
-	return &Service{
-		parallelismLimitSemaphore: parallelismLimitSemaphore,
-		repoLock:                  repoLock,
-		cache:                     cache,
-		metricsServer:             metricsServer,
-		newGitClient:              git.NewClientExt,
-		newOCIClient:              oci.NewClient,
-		newHelmClient: func(repoURL string, creds helm.Creds, enableOci bool, proxy string, noProxy string, opts ...helm.ClientOpts) helm.Client {
-			// Add User-Agent option if configured
-			if initConstants.HelmUserAgent != "" {
-				opts = append(opts, helm.WithUserAgent(initConstants.HelmUserAgent))
-			}
-			opts = append(opts, helm.WithHelmChartCacheExpiration(initConstants.HelmChartCacheExpiration))
-			return helm.NewClientWithLock(repoURL, creds, sync.NewKeyLock(), enableOci, proxy, noProxy, opts...)
-		},
+	s := &Service{
+		repoLock:           repoLock,
+		cache:              cache,
+		metricsServer:      metricsServer,
+		newGitClient:       git.NewClientExt,
+		newOCIClient:       oci.NewClient,
 		initConstants:      initConstants,
 		now:                time.Now,
 		gitCredsStore:      gitCredsStore,
@@ -171,6 +184,31 @@ func NewService(metricsServer *metrics.MetricsServer, cache *cache.Cache, initCo
 		rootDir:            rootDir,
 		symlinksState:      gocache.New(12*time.Hour, time.Hour),
 	}
+	s.configProvider = configbus.NewHybridProvider(
+		configbus.NewCRDProvider(nil),
+		configbus.NewLegacyProvider(nil, &configbus.LegacyValues{Reposerver: s}),
+	)
+	cache.SetConfigProvider(s.configProvider)
+
+	// Size the operation semaphore from the Provider (Legacy → initConstants).
+	parallelismLimit := initConstants.ParallelismLimit
+	if limit, err := s.configProvider.ParallelismLimit(); err == nil {
+		parallelismLimit = limit
+	} else if initConstants.ParallelismLimit == 0 {
+		log.WithError(err).Warn("config: reposerver parallelism limit unavailable; unlimited concurrency")
+	}
+	if parallelismLimit > 0 {
+		s.parallelismLimitSemaphore = semaphore.NewWeighted(parallelismLimit)
+	}
+	s.newHelmClient = func(repoURL string, creds helm.Creds, enableOci bool, proxy string, noProxy string, opts ...helm.ClientOpts) (helm.Client, error) {
+		standardOpts, err := s.helmClientStandardOpts()
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, standardOpts...)
+		return helm.NewClientWithLock(repoURL, creds, sync.NewKeyLock(), enableOci, proxy, noProxy, opts...), nil
+	}
+	return s
 }
 
 func (s *Service) Init() error {
@@ -210,7 +248,15 @@ func (s *Service) Init() error {
 
 // ListOCITags List a subset of the refs (currently, branches and tags) of a git repo
 func (s *Service) ListOCITags(ctx context.Context, q *apiclient.ListRefsRequest) (*apiclient.Refs, error) {
-	ociClient, err := s.newOCIClient(q.Repo.Repo, q.Repo.GetOCICreds(), q.Repo.Proxy, q.Repo.NoProxy, s.initConstants.OCIMediaTypes, s.ociClientStandardOpts()...)
+	ociMediaTypes, err := s.configProvider.OCIMediaTypes()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve oci media types: %w", err)
+	}
+	ociStandardOpts, err := s.ociClientStandardOpts()
+	if err != nil {
+		return nil, err
+	}
+	ociClient, err := s.newOCIClient(q.Repo.Repo, q.Repo.GetOCICreds(), q.Repo.Proxy, q.Repo.NoProxy, ociMediaTypes, ociStandardOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("error creating oci client: %w", err)
 	}
@@ -274,15 +320,24 @@ func (s *Service) ListApps(ctx context.Context, q *apiclient.ListAppsRequest) (*
 	s.metricsServer.IncPendingRepoRequest(q.Repo.Repo)
 	defer s.metricsServer.DecPendingRepoRequest(q.Repo.Repo)
 
+	submoduleEnabled, err := s.configProvider.SubmoduleEnabled()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve submodule enabled: %w", err)
+	}
+	cmpTarExcludedGlobs, err := s.configProvider.CMPTarExcludedGlobs()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve cmp tar excluded globs: %w", err)
+	}
+
 	closer, err := s.repoLock.Lock(gitClient.Root(), commitSHA, true, func(clean bool) (goio.Closer, error) {
-		return s.checkoutRevision(ctx, gitClient, commitSHA, s.initConstants.SubmoduleEnabled, q.Repo.Depth, clean)
+		return s.checkoutRevision(ctx, gitClient, commitSHA, submoduleEnabled, q.Repo.Depth, clean)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error acquiring repository lock: %w", err)
 	}
 
 	defer utilio.Close(closer)
-	apps, err := discovery.Discover(ctx, gitClient.Root(), gitClient.Root(), q.EnabledSourceTypes, s.initConstants.CMPTarExcludedGlobs, []string{})
+	apps, err := discovery.Discover(ctx, gitClient.Root(), gitClient.Root(), q.EnabledSourceTypes, cmpTarExcludedGlobs, []string{})
 	if err != nil {
 		return nil, fmt.Errorf("error discovering applications: %w", err)
 	}
@@ -392,6 +447,11 @@ func (s *Service) runRepoOperation(
 		}
 	}
 
+	allowOutOfBoundsSymlinks, err := s.configProvider.AllowOutOfBoundsSymlinks()
+	if err != nil {
+		return fmt.Errorf("failed to resolve allow out of bounds symlinks: %w", err)
+	}
+
 	s.metricsServer.IncPendingRepoRequest(repo.Repo)
 	defer s.metricsServer.DecPendingRepoRequest(repo.Repo)
 
@@ -419,7 +479,7 @@ func (s *Service) runRepoOperation(
 		}
 		defer utilio.Close(closer)
 
-		if !s.initConstants.AllowOutOfBoundsSymlinks {
+		if !allowOutOfBoundsSymlinks {
 			err := s.checkOutOfBoundsSymlinks(ociPath, revision, settings.noCache)
 			if err != nil {
 				oobError := &apppathutil.OutOfBoundsSymlinkError{}
@@ -455,12 +515,20 @@ func (s *Service) runRepoOperation(
 		if source.Helm != nil {
 			helmPassCredentials = source.Helm.PassCredentials
 		}
-		chartPath, closer, err := helmClient.ExtractChart(ctx, source.Chart, revision, helmPassCredentials, s.initConstants.HelmManifestMaxExtractedSize, s.initConstants.DisableHelmManifestMaxExtractedSize)
+		helmManifestMaxExtractedSize, err := s.configProvider.HelmManifestMaxExtractedSize()
+		if err != nil {
+			return fmt.Errorf("failed to resolve helm manifest max extracted size: %w", err)
+		}
+		disableHelmManifestMaxExtractedSize, err := s.configProvider.DisableHelmManifestMaxExtractedSize()
+		if err != nil {
+			return fmt.Errorf("failed to resolve disable helm manifest max extracted size: %w", err)
+		}
+		chartPath, closer, err := helmClient.ExtractChart(ctx, source.Chart, revision, helmPassCredentials, helmManifestMaxExtractedSize, disableHelmManifestMaxExtractedSize)
 		if err != nil {
 			return err
 		}
 		defer utilio.Close(closer)
-		if !s.initConstants.AllowOutOfBoundsSymlinks {
+		if !allowOutOfBoundsSymlinks {
 			err := s.checkOutOfBoundsSymlinks(chartPath, revision, settings.noCache)
 			if err != nil {
 				oobError := &apppathutil.OutOfBoundsSymlinkError{}
@@ -480,8 +548,12 @@ func (s *Service) runRepoOperation(
 			return &operationContext{chartPath, "", nil}, nil
 		})
 	}
+	submoduleEnabled, err := s.configProvider.SubmoduleEnabled()
+	if err != nil {
+		return fmt.Errorf("failed to resolve submodule enabled: %w", err)
+	}
 	closer, err := s.repoLock.Lock(gitClient.Root(), revision, settings.allowConcurrent, func(clean bool) (goio.Closer, error) {
-		return s.checkoutRevision(ctx, gitClient, revision, s.initConstants.SubmoduleEnabled, repo.Depth, clean)
+		return s.checkoutRevision(ctx, gitClient, revision, submoduleEnabled, repo.Depth, clean)
 	})
 	if err != nil {
 		return err
@@ -489,7 +561,7 @@ func (s *Service) runRepoOperation(
 
 	defer utilio.Close(closer)
 
-	if !s.initConstants.AllowOutOfBoundsSymlinks {
+	if !allowOutOfBoundsSymlinks {
 		err := s.checkOutOfBoundsSymlinks(gitClient.Root(), revision, settings.noCache, ".git")
 		if err != nil {
 			oobError := &apppathutil.OutOfBoundsSymlinkError{}
@@ -745,12 +817,24 @@ func (s *Service) GenerateManifestWithFiles(stream apiclient.RepoServerService_G
 		}
 	}()
 
-	req, metadata, err := manifeststream.ReceiveManifestFileStream(stream.Context(), stream, workDir, s.initConstants.StreamedManifestMaxTarSize, s.initConstants.StreamedManifestMaxExtractedSize)
+	streamedManifestMaxTarSize, err := s.configProvider.StreamedManifestMaxTarSize()
+	if err != nil {
+		return fmt.Errorf("failed to resolve streamed manifest max tar size: %w", err)
+	}
+	streamedManifestMaxExtractedSize, err := s.configProvider.StreamedManifestMaxExtractedSize()
+	if err != nil {
+		return fmt.Errorf("failed to resolve streamed manifest max extracted size: %w", err)
+	}
+	req, metadata, err := manifeststream.ReceiveManifestFileStream(stream.Context(), stream, workDir, streamedManifestMaxTarSize, streamedManifestMaxExtractedSize)
 	if err != nil {
 		return fmt.Errorf("error receiving manifest file stream: %w", err)
 	}
 
-	if !s.initConstants.AllowOutOfBoundsSymlinks {
+	allowOutOfBoundsSymlinks, err := s.configProvider.AllowOutOfBoundsSymlinks()
+	if err != nil {
+		return fmt.Errorf("failed to resolve allow out of bounds symlinks: %w", err)
+	}
+	if !allowOutOfBoundsSymlinks {
 		err := apppathutil.CheckOutOfBoundsSymlinks(workDir)
 		if err != nil {
 			oobError := &apppathutil.OutOfBoundsSymlinkError{}
@@ -858,6 +942,37 @@ func (s *Service) runManifestGenAsync(ctx context.Context, repoRoot, commitSHA, 
 	appSourceCopy := q.ApplicationSource.DeepCopy()
 	repoRefs := make(map[string]repoRef)
 
+	submoduleEnabled, err := s.configProvider.SubmoduleEnabled()
+	if err != nil {
+		ch.errCh <- fmt.Errorf("failed to resolve submodule enabled: %w", err)
+		return
+	}
+	allowOutOfBoundsSymlinks, err := s.configProvider.AllowOutOfBoundsSymlinks()
+	if err != nil {
+		ch.errCh <- fmt.Errorf("failed to resolve allow out of bounds symlinks: %w", err)
+		return
+	}
+	maxCombinedDirectoryManifestsSize, err := s.configProvider.MaxCombinedDirectoryManifestsSize()
+	if err != nil {
+		ch.errCh <- fmt.Errorf("failed to resolve max combined directory manifests size: %w", err)
+		return
+	}
+	cmpTarExcludedGlobs, err := s.configProvider.CMPTarExcludedGlobs()
+	if err != nil {
+		ch.errCh <- fmt.Errorf("failed to resolve cmp tar excluded globs: %w", err)
+		return
+	}
+	cmpUseManifestGeneratePaths, err := s.configProvider.CMPUseManifestGeneratePaths()
+	if err != nil {
+		ch.errCh <- fmt.Errorf("failed to resolve cmp use manifest generate paths: %w", err)
+		return
+	}
+	pauseGenerationAfterFailedGenerationAttempts, err := s.configProvider.PauseGenerationAfterFailedGenerationAttempts()
+	if err != nil {
+		ch.errCh <- fmt.Errorf("failed to resolve pause generation after failed generation attempts: %w", err)
+		return
+	}
+
 	var manifestGenResult *apiclient.ManifestResponse
 	opContext, err := opContextSrc()
 	if err == nil {
@@ -918,7 +1033,7 @@ func (s *Service) runManifestGenAsync(ctx context.Context, repoRoot, commitSHA, 
 							// For multi-source Applications where the primary source is a Helm/OCI artifact,
 							// q.Repo.Depth is unset (0), which would otherwise force a full fetch of the
 							// referenced git repository regardless of its configured depth.
-							return s.checkoutRevision(ctx, gitClient, referencedCommitSHA, s.initConstants.SubmoduleEnabled, refSourceMapping.Repo.Depth, clean)
+							return s.checkoutRevision(ctx, gitClient, referencedCommitSHA, submoduleEnabled, refSourceMapping.Repo.Depth, clean)
 						})
 						if err != nil {
 							log.Errorf("failed to acquire lock for referenced source %s", normalizedRepoURL)
@@ -933,7 +1048,7 @@ func (s *Service) runManifestGenAsync(ctx context.Context, repoRoot, commitSHA, 
 						}(closer)
 
 						// Symlink check must happen after acquiring lock.
-						if !s.initConstants.AllowOutOfBoundsSymlinks {
+						if !allowOutOfBoundsSymlinks {
 							err := s.checkOutOfBoundsSymlinks(gitClient.Root(), commitSHA, q.NoCache, ".git")
 							if err != nil {
 								oobError := &apppathutil.OutOfBoundsSymlinkError{}
@@ -958,7 +1073,7 @@ func (s *Service) runManifestGenAsync(ctx context.Context, repoRoot, commitSHA, 
 			}
 		}
 
-		manifestGenResult, err = GenerateManifests(ctx, opContext.appPath, repoRoot, commitSHA, q, false, s.gitCredsStore, s.initConstants.MaxCombinedDirectoryManifestsSize, s.gitRepoPaths, WithCMPTarDoneChannel(ch.tarDoneCh), WithCMPTarExcludedGlobs(s.initConstants.CMPTarExcludedGlobs), WithCMPUseManifestGeneratePaths(s.initConstants.CMPUseManifestGeneratePaths))
+		manifestGenResult, err = GenerateManifests(ctx, opContext.appPath, repoRoot, commitSHA, q, false, s.gitCredsStore, maxCombinedDirectoryManifestsSize, s.gitRepoPaths, WithCMPTarDoneChannel(ch.tarDoneCh), WithCMPTarExcludedGlobs(cmpTarExcludedGlobs), WithCMPUseManifestGeneratePaths(cmpUseManifestGeneratePaths))
 	}
 	refSourceCommitSHAs := make(map[string]string)
 	if len(repoRefs) > 0 {
@@ -974,7 +1089,7 @@ func (s *Service) runManifestGenAsync(ctx context.Context, repoRoot, commitSHA, 
 		})
 
 		// If manifest generation error caching is enabled
-		if s.initConstants.PauseGenerationAfterFailedGenerationAttempts > 0 {
+		if pauseGenerationAfterFailedGenerationAttempts > 0 {
 			cache.LogDebugManifestCacheKeyFields("getting manifests cache", "GenerateManifests error", manifestKey)
 
 			// Retrieve a new copy (if available) of the cached response: this ensures we are updating the latest copy of the cache,
@@ -1049,7 +1164,7 @@ func getManifestCacheKey(revision string, appSource *v1alpha1.ApplicationSource,
 
 // getManifestCacheEntry returns false if the 'generate manifests' operation should be run by runRepoOperation, e.g.:
 // - If the cache result is empty for the requested key
-// - If the cache is not empty, but the cached value is a manifest generation error AND we have not yet met the failure threshold (e.g. res.NumberOfConsecutiveFailures > 0 && res.NumberOfConsecutiveFailures <  s.initConstants.PauseGenerationAfterFailedGenerationAttempts)
+// - If the cache is not empty, but the cached value is a manifest generation error AND we have not yet met the failure threshold (e.g. res.NumberOfConsecutiveFailures > 0 && res.NumberOfConsecutiveFailures < PauseGenerationAfterFailedGenerationAttempts)
 // - If the cache is not empty, but the cache value is an error AND that generation error has expired
 // and returns true otherwise.
 // If true is returned, either the second or third parameter (but not both) will contain a value from the cache (a ManifestResponse, or error, respectively)
@@ -1062,16 +1177,29 @@ func (s *Service) getManifestCacheEntry(revision string, q *apiclient.ManifestRe
 	if err == nil {
 		// The cache contains an existing value
 
+		pauseGenerationAfterFailedGenerationAttempts, cfgErr := s.configProvider.PauseGenerationAfterFailedGenerationAttempts()
+		if cfgErr != nil {
+			return false, nil, fmt.Errorf("failed to resolve pause generation after failed generation attempts: %w", cfgErr)
+		}
+		pauseGenerationOnFailureForMinutes, cfgErr := s.configProvider.PauseGenerationOnFailureForMinutes()
+		if cfgErr != nil {
+			return false, nil, fmt.Errorf("failed to resolve pause generation on failure for minutes: %w", cfgErr)
+		}
+		pauseGenerationOnFailureForRequests, cfgErr := s.configProvider.PauseGenerationOnFailureForRequests()
+		if cfgErr != nil {
+			return false, nil, fmt.Errorf("failed to resolve pause generation on failure for requests: %w", cfgErr)
+		}
+
 		// If caching of manifest generation errors is enabled, and res is a cached manifest generation error...
-		if s.initConstants.PauseGenerationAfterFailedGenerationAttempts > 0 && res.FirstFailureTimestamp > 0 {
+		if pauseGenerationAfterFailedGenerationAttempts > 0 && res.FirstFailureTimestamp > 0 {
 			// If we are already in the 'manifest generation caching' state, due to too many consecutive failures...
-			if res.NumberOfConsecutiveFailures >= s.initConstants.PauseGenerationAfterFailedGenerationAttempts {
+			if res.NumberOfConsecutiveFailures >= pauseGenerationAfterFailedGenerationAttempts {
 				// Check if enough time has passed to try generation again (e.g. to exit the 'manifest generation caching' state)
-				if s.initConstants.PauseGenerationOnFailureForMinutes > 0 {
+				if pauseGenerationOnFailureForMinutes > 0 {
 					elapsedTimeInMinutes := int((s.now().Unix() - res.FirstFailureTimestamp) / 60)
 
 					// After X minutes, reset the cache and retry the operation (e.g. perhaps the error is ephemeral and has passed)
-					if elapsedTimeInMinutes >= s.initConstants.PauseGenerationOnFailureForMinutes {
+					if elapsedTimeInMinutes >= pauseGenerationOnFailureForMinutes {
 						cache.LogDebugManifestCacheKeyFields("deleting manifests cache", "manifest hash did not match or cached response is empty", cacheKey)
 
 						// We can now try again, so reset the cache state and run the operation below
@@ -1085,8 +1213,8 @@ func (s *Service) getManifestCacheEntry(revision string, q *apiclient.ManifestRe
 				}
 
 				// Check if enough cached responses have been returned to try generation again (e.g. to exit the 'manifest generation caching' state)
-				if s.initConstants.PauseGenerationOnFailureForRequests > 0 && res.NumberOfCachedResponsesReturned > 0 {
-					if res.NumberOfCachedResponsesReturned >= s.initConstants.PauseGenerationOnFailureForRequests {
+				if pauseGenerationOnFailureForRequests > 0 && res.NumberOfCachedResponsesReturned > 0 {
+					if res.NumberOfCachedResponsesReturned >= pauseGenerationOnFailureForRequests {
 						cache.LogDebugManifestCacheKeyFields("deleting manifests cache", "reset after paused generation count", cacheKey)
 
 						// We can now try again, so reset the error cache state and run the operation below
@@ -2440,7 +2568,11 @@ func (s *Service) GetAppDetails(ctx context.Context, q *apiclient.RepoServerAppD
 
 		env := newEnvRepoQuery(q, revision)
 
-		appSourceType, err := GetAppSourceType(ctx, q.Source, opContext.appPath, repoRoot, q.AppName, q.EnabledSourceTypes, s.initConstants.CMPTarExcludedGlobs, env.Environ())
+		cmpTarExcludedGlobs, err := s.configProvider.CMPTarExcludedGlobs()
+		if err != nil {
+			return fmt.Errorf("failed to resolve cmp tar excluded globs: %w", err)
+		}
+		appSourceType, err := GetAppSourceType(ctx, q.Source, opContext.appPath, repoRoot, q.AppName, q.EnabledSourceTypes, cmpTarExcludedGlobs, env.Environ())
 		if err != nil {
 			return err
 		}
@@ -2457,7 +2589,7 @@ func (s *Service) GetAppDetails(ctx context.Context, q *apiclient.RepoServerAppD
 				return err
 			}
 		case v1alpha1.ApplicationSourceTypePlugin:
-			if err := populatePluginAppDetails(ctx, res, opContext.appPath, repoRoot, q, s.initConstants.CMPTarExcludedGlobs); err != nil {
+			if err := populatePluginAppDetails(ctx, res, opContext.appPath, repoRoot, q, cmpTarExcludedGlobs); err != nil {
 				return fmt.Errorf("failed to populate plugin app details: %w", err)
 			}
 		}
@@ -2543,6 +2675,10 @@ func (s *Service) populateHelmAppDetails(ctx context.Context, res *apiclient.Rep
 		if q.Repo.Type == "git" {
 			mainRepoURL = git.NormalizeGitURL(q.Repo.Repo)
 		}
+		submoduleEnabled, err := s.configProvider.SubmoduleEnabled()
+		if err != nil {
+			return fmt.Errorf("failed to resolve submodule enabled: %w", err)
+		}
 		refNames := []string{}
 		for refName := range getReferencedSources(selectedValueFiles, q.RefSources) {
 			refNames = append(refNames, refName)
@@ -2575,7 +2711,7 @@ func (s *Service) populateHelmAppDetails(ctx context.Context, res *apiclient.Rep
 				}
 			}
 			closer, err := s.repoLock.Lock(gitClient.Root(), refSHA, true, func(clean bool) (goio.Closer, error) {
-				return s.checkoutRevision(ctx, gitClient, refSHA, s.initConstants.SubmoduleEnabled, refSource.Repo.Depth, clean)
+				return s.checkoutRevision(ctx, gitClient, refSHA, submoduleEnabled, refSource.Repo.Depth, clean)
 			})
 			if err != nil {
 				return fmt.Errorf("failed to acquire lock for referenced repo %q: %w", refSource.Repo.Repo, err)
@@ -2758,8 +2894,12 @@ func (s *Service) GetRevisionMetadata(ctx context.Context, q *apiclient.RepoServ
 	s.metricsServer.IncPendingRepoRequest(q.Repo.Repo)
 	defer s.metricsServer.DecPendingRepoRequest(q.Repo.Repo)
 
+	submoduleEnabled, err := s.configProvider.SubmoduleEnabled()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve submodule enabled: %w", err)
+	}
 	closer, err := s.repoLock.Lock(gitClient.Root(), q.Revision, true, func(clean bool) (goio.Closer, error) {
-		return s.checkoutRevision(ctx, gitClient, q.Revision, s.initConstants.SubmoduleEnabled, q.Repo.Depth, clean)
+		return s.checkoutRevision(ctx, gitClient, q.Revision, submoduleEnabled, q.Repo.Depth, clean)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error acquiring repo lock: %w", err)
@@ -2820,7 +2960,15 @@ func (s *Service) GetOCIMetadata(ctx context.Context, q *apiclient.RepoServerRev
 		log.Warnf("oci metadata cache error %s/%s: %v", q.Repo.Repo, q.Revision, err)
 	}
 
-	client, err := s.newOCIClient(q.Repo.Repo, q.Repo.GetOCICreds(), q.Repo.Proxy, q.Repo.NoProxy, s.initConstants.OCIMediaTypes, s.ociClientStandardOpts()...)
+	ociMediaTypes, err := s.configProvider.OCIMediaTypes()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve oci media types: %w", err)
+	}
+	ociStandardOpts, err := s.ociClientStandardOpts()
+	if err != nil {
+		return nil, err
+	}
+	client, err := s.newOCIClient(q.Repo.Repo, q.Repo.GetOCICreds(), q.Repo.Proxy, q.Repo.NoProxy, ociMediaTypes, ociStandardOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize oci client: %w", err)
 	}
@@ -2862,7 +3010,15 @@ func (s *Service) GetRevisionChartDetails(ctx context.Context, q *apiclient.Repo
 	if err != nil {
 		return nil, fmt.Errorf("helm client error: %w", err)
 	}
-	chartPath, closer, err := helmClient.ExtractChart(ctx, q.Name, revision, false, s.initConstants.HelmManifestMaxExtractedSize, s.initConstants.DisableHelmManifestMaxExtractedSize)
+	helmManifestMaxExtractedSize, err := s.configProvider.HelmManifestMaxExtractedSize()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve helm manifest max extracted size: %w", err)
+	}
+	disableHelmManifestMaxExtractedSize, err := s.configProvider.DisableHelmManifestMaxExtractedSize()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve disable helm manifest max extracted size: %w", err)
+	}
+	chartPath, closer, err := helmClient.ExtractChart(ctx, q.Name, revision, false, helmManifestMaxExtractedSize, disableHelmManifestMaxExtractedSize)
 	if err != nil {
 		return nil, fmt.Errorf("error extracting chart: %w", err)
 	}
@@ -2896,9 +3052,13 @@ func (s *Service) newClient(repo *v1alpha1.Repository, opts ...git.ClientOpts) (
 	if err != nil {
 		return nil, err
 	}
+	enableBuiltinGitConfig, err := s.configProvider.EnableBuiltinGitConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve enable builtin git config: %w", err)
+	}
 	opts = append(opts,
 		git.WithEventHandlers(metrics.NewGitClientEventHandlers(s.metricsServer)),
-		git.WithBuiltinGitConfig(s.initConstants.EnableBuiltinGitConfig))
+		git.WithBuiltinGitConfig(enableBuiltinGitConfig))
 	return s.newGitClient(repo.Repo, repoPath, repo.GetGitCreds(s.gitCredsStore), repo.IsInsecure(), repo.EnableLFS, repo.Proxy, repo.NoProxy, opts...)
 }
 
@@ -2918,7 +3078,15 @@ func (s *Service) newClientResolveRevision(repo *v1alpha1.Repository, revision s
 }
 
 func (s *Service) newOCIClientResolveRevision(ctx context.Context, repo *v1alpha1.Repository, revision string, noRevisionCache bool) (oci.Client, string, error) {
-	ociClient, err := s.newOCIClient(repo.Repo, repo.GetOCICreds(), repo.Proxy, repo.NoProxy, s.initConstants.OCIMediaTypes, s.ociClientStandardOpts()...)
+	ociMediaTypes, err := s.configProvider.OCIMediaTypes()
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to resolve oci media types: %w", err)
+	}
+	ociStandardOpts, err := s.ociClientStandardOpts()
+	if err != nil {
+		return nil, "", err
+	}
+	ociClient, err := s.newOCIClient(repo.Repo, repo.GetOCICreds(), repo.Proxy, repo.NoProxy, ociMediaTypes, ociStandardOpts...)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to initialize oci client: %w", err)
 	}
@@ -2937,7 +3105,10 @@ func (s *Service) newHelmClientResolveRevision(ctx context.Context, repo *v1alph
 	if repo.InsecureOCIForceHttp {
 		opts = append(opts, helm.WithPlainHTTP())
 	}
-	helmClient := s.newHelmClient(repo.Repo, repo.GetHelmCreds(), enableOCI, repo.Proxy, repo.NoProxy, opts...)
+	helmClient, err := s.newHelmClient(repo.Repo, repo.GetHelmCreds(), enableOCI, repo.Proxy, repo.NoProxy, opts...)
+	if err != nil {
+		return nil, "", err
+	}
 
 	// Note: This check runs the risk of returning a version which is not found in the helm registry.
 	if versions.IsVersion(revision) {
@@ -2952,7 +3123,11 @@ func (s *Service) newHelmClientResolveRevision(ctx context.Context, repo *v1alph
 			return nil, "", fmt.Errorf("unable to get tags: %w", err)
 		}
 	} else {
-		index, err := helmClient.GetIndex(ctx, noRevisionCache, s.initConstants.HelmRegistryMaxIndexSize)
+		helmRegistryMaxIndexSize, err := s.configProvider.HelmRegistryMaxIndexSize()
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to resolve helm registry max index size: %w", err)
+		}
+		index, err := helmClient.GetIndex(ctx, noRevisionCache, helmRegistryMaxIndexSize)
 		if err != nil {
 			return nil, "", err
 		}
@@ -3107,7 +3282,15 @@ func checkoutRevision(ctx context.Context, gitClient git.Client, revision string
 }
 
 func (s *Service) GetHelmCharts(ctx context.Context, q *apiclient.HelmChartsRequest) (*apiclient.HelmChartsResponse, error) {
-	index, err := s.newHelmClient(q.Repo.Repo, q.Repo.GetHelmCreds(), q.Repo.EnableOCI, q.Repo.Proxy, q.Repo.NoProxy, helm.WithIndexCache(s.cache), helm.WithChartPaths(s.chartPaths)).GetIndex(ctx, true, s.initConstants.HelmRegistryMaxIndexSize)
+	helmRegistryMaxIndexSize, err := s.configProvider.HelmRegistryMaxIndexSize()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve helm registry max index size: %w", err)
+	}
+	helmClient, err := s.newHelmClient(q.Repo.Repo, q.Repo.GetHelmCreds(), q.Repo.EnableOCI, q.Repo.Proxy, q.Repo.NoProxy, helm.WithIndexCache(s.cache), helm.WithChartPaths(s.chartPaths))
+	if err != nil {
+		return nil, err
+	}
+	index, err := helmClient.GetIndex(ctx, true, helmRegistryMaxIndexSize)
 	if err != nil {
 		return nil, err
 	}
@@ -3132,8 +3315,12 @@ func (s *Service) TestRepository(ctx context.Context, q *apiclient.TestRepositor
 			return git.TestRepo(repo.Repo, repo.GetGitCreds(s.gitCredsStore), repo.IsInsecure(), repo.IsLFSEnabled(), repo.Proxy, repo.NoProxy)
 		},
 		"oci": func() error {
+			ociMediaTypes, cfgErr := s.configProvider.OCIMediaTypes()
+			if cfgErr != nil {
+				return fmt.Errorf("failed to resolve oci media types: %w", cfgErr)
+			}
 			client, err := oci.NewClient(repo.Repo, repo.GetOCICreds(), repo.Proxy, repo.NoProxy,
-				s.initConstants.OCIMediaTypes, oci.WithEventHandlers(metrics.NewOCIClientEventHandlers(s.metricsServer)))
+				ociMediaTypes, oci.WithEventHandlers(metrics.NewOCIClientEventHandlers(s.metricsServer)))
 			if err != nil {
 				return err
 			}
@@ -3152,7 +3339,11 @@ func (s *Service) TestRepository(ctx context.Context, q *apiclient.TestRepositor
 				_, err := helm.NewClient(repo.Repo, repo.GetHelmCreds(), repo.EnableOCI, repo.Proxy, repo.NoProxy, clientOpts...).TestHelmOCI()
 				return err
 			}
-			_, err := helm.NewClient(repo.Repo, repo.GetHelmCreds(), repo.EnableOCI, repo.Proxy, repo.NoProxy).GetIndex(ctx, false, s.initConstants.HelmRegistryMaxIndexSize)
+			helmRegistryMaxIndexSize, cfgErr := s.configProvider.HelmRegistryMaxIndexSize()
+			if cfgErr != nil {
+				return fmt.Errorf("failed to resolve helm registry max index size: %w", cfgErr)
+			}
+			_, err := helm.NewClient(repo.Repo, repo.GetHelmCreds(), repo.EnableOCI, repo.Proxy, repo.NoProxy).GetIndex(ctx, false, helmRegistryMaxIndexSize)
 			return err
 		},
 	}
@@ -3332,6 +3523,10 @@ func (s *Service) GetGitDirectories(ctx context.Context, request *apiclient.GitD
 	}
 
 	repoRoot := gitClient.Root()
+	includeHiddenDirectories, err := s.configProvider.IncludeHiddenDirectories()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve include hidden directories: %w", err)
+	}
 	var paths []string
 	if err := filepath.WalkDir(repoRoot, func(path string, entry fs.DirEntry, fnErr error) error {
 		if fnErr != nil {
@@ -3341,7 +3536,7 @@ func (s *Service) GetGitDirectories(ctx context.Context, request *apiclient.GitD
 			return nil
 		}
 
-		if !s.initConstants.IncludeHiddenDirectories && strings.HasPrefix(entry.Name(), ".") {
+		if !includeHiddenDirectories && strings.HasPrefix(entry.Name(), ".") {
 			return filepath.SkipDir // Skip hidden directory
 		}
 
@@ -3621,12 +3816,37 @@ func getManifestCacheKeyFromUpdateRevisionRequest(request *apiclient.UpdateRevis
 	}
 }
 
-func (s *Service) ociClientStandardOpts() []oci.ClientOpts {
+func (s *Service) helmClientStandardOpts() ([]helm.ClientOpts, error) {
+	var opts []helm.ClientOpts
+	helmUserAgent, err := s.configProvider.HelmUserAgent()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve helm user agent: %w", err)
+	}
+	if helmUserAgent != "" {
+		opts = append(opts, helm.WithUserAgent(helmUserAgent))
+	}
+	helmChartCacheExpiration, err := s.configProvider.HelmChartCacheExpiration()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve helm chart cache expiration: %w", err)
+	}
+	opts = append(opts, helm.WithHelmChartCacheExpiration(helmChartCacheExpiration))
+	return opts, nil
+}
+
+func (s *Service) ociClientStandardOpts() ([]oci.ClientOpts, error) {
+	ociManifestMaxExtractedSize, err := s.configProvider.OCIManifestMaxExtractedSize()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve oci manifest max extracted size: %w", err)
+	}
+	disableOCIManifestMaxExtractedSize, err := s.configProvider.DisableOCIManifestMaxExtractedSize()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve disable oci manifest max extracted size: %w", err)
+	}
 	return []oci.ClientOpts{
 		oci.WithIndexCache(s.cache),
 		oci.WithImagePaths(s.ociPaths),
-		oci.WithManifestMaxExtractedSize(s.initConstants.OCIManifestMaxExtractedSize),
-		oci.WithDisableManifestMaxExtractedSize(s.initConstants.DisableOCIManifestMaxExtractedSize),
+		oci.WithManifestMaxExtractedSize(ociManifestMaxExtractedSize),
+		oci.WithDisableManifestMaxExtractedSize(disableOCIManifestMaxExtractedSize),
 		oci.WithEventHandlers(metrics.NewOCIClientEventHandlers(s.metricsServer)),
-	}
+	}, nil
 }

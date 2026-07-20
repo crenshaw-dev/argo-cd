@@ -18,6 +18,9 @@ type LegacyValues struct {
 	// Server is the live argocd-server (or test fake) that owns durable legacy
 	// config fields. Consumers read via Legacy* / Provider getters.
 	Server ServerLegacy
+	// Reposerver is the live argocd-repo-server Service (or test fake) that owns
+	// durable legacy config fields. Consumers read via Legacy* / Provider getters.
+	Reposerver ReposerverLegacy
 }
 
 // ControllerLegacy is implemented by *controller.ApplicationController.

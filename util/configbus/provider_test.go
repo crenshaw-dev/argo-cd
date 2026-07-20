@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/argoproj/argo-cd/v3/util/argo/normalizers"
@@ -268,3 +269,166 @@ func (s *stubServerLegacy) LegacyScmRootCAPath() string           { return s.scm
 func (s *stubServerLegacy) LegacyAllowedScmProviders() []string   { return s.allowedScm }
 func (s *stubServerLegacy) LegacyEnableScmProviders() bool        { return s.enableScm }
 func (s *stubServerLegacy) LegacyEnableGitHubAPIMetrics() bool    { return s.ghMetrics }
+
+func TestLegacyProviderReposerverLegacyRoundTrip(t *testing.T) {
+	stub := &stubReposerverLegacy{
+		parallelismLimit:     4,
+		allowOOB:             true,
+		repoCacheExpiration:  2 * time.Hour,
+		submoduleEnabled:     true,
+		helmUserAgent:        "test-agent",
+		ociMediaTypes:        []string{"application/vnd.oci.image.layer.v1.tar"},
+		revisionCacheLockTTL: 15 * time.Second,
+	}
+	p := NewLegacyProvider(nil, &LegacyValues{Reposerver: stub})
+
+	n, err := p.ParallelismLimit()
+	require.NoError(t, err)
+	assert.Equal(t, int64(4), n)
+
+	b, err := p.AllowOutOfBoundsSymlinks()
+	require.NoError(t, err)
+	assert.True(t, b)
+
+	d, err := p.RepoCacheExpiration()
+	require.NoError(t, err)
+	assert.Equal(t, 2*time.Hour, d)
+
+	agent, err := p.HelmUserAgent()
+	require.NoError(t, err)
+	assert.Equal(t, "test-agent", agent)
+
+	ttl, err := p.RevisionCacheLockTimeout()
+	require.NoError(t, err)
+	assert.Equal(t, 15*time.Second, ttl)
+}
+
+func TestCRDProviderReposerverReturnsErrNotConfigured(t *testing.T) {
+	p := NewCRDProvider(nil)
+
+	_, err := p.ParallelismLimit()
+	assert.ErrorIs(t, err, ErrNotConfigured)
+
+	_, err = p.AllowOutOfBoundsSymlinks()
+	assert.ErrorIs(t, err, ErrNotConfigured)
+
+	_, err = p.RepoCacheExpiration()
+	assert.ErrorIs(t, err, ErrNotConfigured)
+}
+
+func TestHybridProviderReposerverFallsBackToLegacy(t *testing.T) {
+	stub := &stubReposerverLegacy{
+		parallelismLimit:    8,
+		allowOOB:            true,
+		repoCacheExpiration: 90 * time.Minute,
+	}
+	p := NewHybridProvider(
+		NewCRDProvider(nil),
+		NewLegacyProvider(nil, &LegacyValues{Reposerver: stub}),
+	)
+
+	n, err := p.ParallelismLimit()
+	require.NoError(t, err)
+	assert.Equal(t, int64(8), n)
+
+	b, err := p.AllowOutOfBoundsSymlinks()
+	require.NoError(t, err)
+	assert.True(t, b)
+
+	d, err := p.RepoCacheExpiration()
+	require.NoError(t, err)
+	assert.Equal(t, 90*time.Minute, d)
+}
+
+type stubReposerverLegacy struct {
+	parallelismLimit                                        int64
+	pauseAfterFailed, pauseMinutes, pauseRequests           int
+	submoduleEnabled, allowOOB, disableOCI, disableHelm     bool
+	includeHidden, cmpUsePaths, enableBuiltinGit            bool
+	maxCombined                                             resource.Quantity
+	cmpGlobs, ociMediaTypes                                 []string
+	streamedMaxExtracted, streamedMaxTar                    int64
+	helmMaxExtracted, helmRegistryMaxIndex, ociMaxExtracted int64
+	helmUserAgent                                           string
+	helmChartCacheExpiration                                time.Duration
+	repoCacheExpiration, revisionCacheExpiration            time.Duration
+	revisionCacheLockTTL                                    time.Duration
+}
+
+func (s *stubReposerverLegacy) LegacyOCIMediaTypes() []string { return s.ociMediaTypes }
+func (s *stubReposerverLegacy) LegacyParallelismLimit() int64 { return s.parallelismLimit }
+func (s *stubReposerverLegacy) LegacyPauseGenerationAfterFailedGenerationAttempts() int {
+	return s.pauseAfterFailed
+}
+
+func (s *stubReposerverLegacy) LegacyPauseGenerationOnFailureForMinutes() int {
+	return s.pauseMinutes
+}
+
+func (s *stubReposerverLegacy) LegacyPauseGenerationOnFailureForRequests() int {
+	return s.pauseRequests
+}
+func (s *stubReposerverLegacy) LegacySubmoduleEnabled() bool { return s.submoduleEnabled }
+func (s *stubReposerverLegacy) LegacyMaxCombinedDirectoryManifestsSize() resource.Quantity {
+	return s.maxCombined
+}
+func (s *stubReposerverLegacy) LegacyCMPTarExcludedGlobs() []string { return s.cmpGlobs }
+func (s *stubReposerverLegacy) LegacyAllowOutOfBoundsSymlinks() bool {
+	return s.allowOOB
+}
+
+func (s *stubReposerverLegacy) LegacyStreamedManifestMaxExtractedSize() int64 {
+	return s.streamedMaxExtracted
+}
+
+func (s *stubReposerverLegacy) LegacyStreamedManifestMaxTarSize() int64 {
+	return s.streamedMaxTar
+}
+
+func (s *stubReposerverLegacy) LegacyHelmManifestMaxExtractedSize() int64 {
+	return s.helmMaxExtracted
+}
+
+func (s *stubReposerverLegacy) LegacyHelmRegistryMaxIndexSize() int64 {
+	return s.helmRegistryMaxIndex
+}
+
+func (s *stubReposerverLegacy) LegacyOCIManifestMaxExtractedSize() int64 {
+	return s.ociMaxExtracted
+}
+
+func (s *stubReposerverLegacy) LegacyDisableOCIManifestMaxExtractedSize() bool {
+	return s.disableOCI
+}
+
+func (s *stubReposerverLegacy) LegacyDisableHelmManifestMaxExtractedSize() bool {
+	return s.disableHelm
+}
+
+func (s *stubReposerverLegacy) LegacyIncludeHiddenDirectories() bool {
+	return s.includeHidden
+}
+
+func (s *stubReposerverLegacy) LegacyCMPUseManifestGeneratePaths() bool {
+	return s.cmpUsePaths
+}
+
+func (s *stubReposerverLegacy) LegacyEnableBuiltinGitConfig() bool {
+	return s.enableBuiltinGit
+}
+func (s *stubReposerverLegacy) LegacyHelmUserAgent() string { return s.helmUserAgent }
+func (s *stubReposerverLegacy) LegacyHelmChartCacheExpiration() time.Duration {
+	return s.helmChartCacheExpiration
+}
+
+func (s *stubReposerverLegacy) LegacyRepoCacheExpiration() time.Duration {
+	return s.repoCacheExpiration
+}
+
+func (s *stubReposerverLegacy) LegacyRevisionCacheExpiration() time.Duration {
+	return s.revisionCacheExpiration
+}
+
+func (s *stubReposerverLegacy) LegacyRevisionCacheLockTimeout() time.Duration {
+	return s.revisionCacheLockTTL
+}
