@@ -15,6 +15,9 @@ import (
 type LegacyValues struct {
 	// Controller is the live application controller (or test fake).
 	Controller ControllerLegacy
+	// Server is the live argocd-server (or test fake) that owns durable legacy
+	// config fields. Consumers read via Legacy* / Provider getters.
+	Server ServerLegacy
 }
 
 // ControllerLegacy is implemented by *controller.ApplicationController.

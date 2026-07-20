@@ -10,7 +10,7 @@ call sites do not.
 
 > [!NOTE]
 > This page is for **contributors** changing how Argo CD reads configuration.
-> It describes the bus as of the first consumer cutover (application-controller).
+> It describes the bus as of the application-controller and API server cutovers.
 > Production processes use `HybridProvider` (CRD first, Legacy fallback). Until
 > the CRD source is wired, every CRD read returns `ErrNotConfigured` and Hybrid
 > falls through to Legacy.
@@ -72,9 +72,16 @@ flowchart LR
 Production processes wire Hybrid:
 
 ```go
+// application-controller
 ctrl.configProvider = configbus.NewHybridProvider(
 	configbus.NewCRDProvider(nil),
 	configbus.NewLegacyProvider(settingsMgr, &configbus.LegacyValues{Controller: &ctrl}),
+)
+
+// argocd-server
+a.configProvider = configbus.NewHybridProvider(
+	configbus.NewCRDProvider(nil),
+	configbus.NewLegacyProvider(settingsMgr, &configbus.LegacyValues{Server: a}),
 )
 ```
 
@@ -89,9 +96,9 @@ provider.EXPECT().SelfHealTimeout().Return(30*time.Second, nil)
 ```
 
 Package-level tests in `util/configbus` still exercise `LegacyProvider` against
-`ControllerLegacy` stubs, `CRDProvider`’s `ErrNotConfigured` behavior, and
-`HybridProvider` / `configured()` fallback rules. Prefer `mocks.Provider` in
-component packages instead of hand-rolled Provider fakes.
+`ControllerLegacy` / `ServerLegacy` stubs, `CRDProvider`’s `ErrNotConfigured`
+behavior, and `HybridProvider` / `configured()` fallback rules. Prefer
+`mocks.Provider` in component packages instead of hand-rolled Provider fakes.
 
 ## Architecture (current)
 
@@ -101,8 +108,8 @@ component packages instead of hand-rolled Provider fakes.
 | `LegacyProvider` | `util/configbus/legacy_provider*.go` | SettingsManager + Legacy adapters + env. |
 | `CRDProvider` | `util/configbus/crd_provider.go` | CRD-only reads (stubbed until CRD source lands). |
 | `HybridProvider` | `util/configbus/hybrid_provider.go` | CRD-first with Legacy fallback on `ErrNotConfigured`. |
-| `LegacyValues` / `ControllerLegacy` | `util/configbus/legacy_provider.go` | Component Legacy adapters. Nil field means “not supplied by this binary.” |
-| Legacy adapters | `controller/legacy_config.go` | **Sole** allowed readers of deprecated controller struct fields. |
+| `LegacyValues` / `ControllerLegacy` / `ServerLegacy` | `util/configbus/legacy_provider.go`, `legacy_provider_server.go` | Component Legacy adapters. Nil field means “not supplied by this binary.” |
+| Legacy adapters | `controller/legacy_config.go`, `server/legacy_config.go` | **Sole** allowed readers of deprecated component struct fields. |
 
 There is **no** global setting registry. Provider methods call
 `SettingsManager` and/or the component Legacy adapter (or, later, the CRD
@@ -113,22 +120,23 @@ source) directly.
 | Binary | Status |
 | --- | --- |
 | Application controller | Wired: `NewHybridProvider(NewCRDProvider(nil), NewLegacyProvider(...))` in `controller/appcontroller.go` |
-| API server, repo-server, ApplicationSet, notifications, commit-server | Not yet on the bus (follow the same pattern when cut over) |
+| API server (`argocd-server`) | Wired: same Hybrid pattern with `LegacyValues{Server: a}` in `server/server.go` |
+| Repo-server, ApplicationSet, notifications, commit-server | Not yet on the bus (follow the same pattern when cut over) |
 
-### Sources of truth (controller)
+### Sources of truth (controller / server)
 
 | Kind of setting | How the Provider gets it | Examples |
 | --- | --- | --- |
-| Flag / env captured at process start | `ControllerLegacy` → deprecated struct fields (via Legacy / Hybrid) | Reconciliation timeout, sync timeout, self-heal, metrics cluster labels |
+| Flag / env captured at process start | `ControllerLegacy` / `ServerLegacy` → deprecated struct fields (via Legacy / Hybrid) | Reconciliation timeout; listen port / insecure / base href |
 | ConfigMap-backed product config | `SettingsManager` (via Legacy / Hybrid) | Resource overrides, app instance label key, tracking method |
 | CRD-backed product config | `CRDProvider` (via Hybrid when set) | Same surface, once the CRD source is wired |
 
-Deprecated struct fields stay on the controller for construction/tests, but
+Deprecated struct fields stay on the component for construction/tests, but
 product code and tests must read via `configProvider.*`. Mark fields
 `Deprecated: use configProvider.…` and confine Legacy readers to
 `legacy_config.go`.
 
-## How the controller wires the Provider
+## How components wire the Provider
 
 In `controller/appcontroller.go` (after settings manager and controller fields
 exist):
@@ -137,6 +145,15 @@ exist):
 ctrl.configProvider = configbus.NewHybridProvider(
 	configbus.NewCRDProvider(nil),
 	configbus.NewLegacyProvider(settingsMgr, &configbus.LegacyValues{Controller: &ctrl}),
+)
+```
+
+In `server/server.go` (after constructing `ArgoCDServer`):
+
+```go
+a.configProvider = configbus.NewHybridProvider(
+	configbus.NewCRDProvider(nil),
+	configbus.NewLegacyProvider(settingsMgr, &configbus.LegacyValues{Server: a}),
 )
 ```
 
@@ -213,16 +230,23 @@ util/configbus/
 ├── provider.go                      # Provider interface, ErrNotConfigured, configured()
 ├── legacy_provider.go               # LegacyProvider, LegacyValues, ControllerLegacy
 ├── legacy_provider_controller.go    # Controller Legacy getters
+├── legacy_provider_server.go        # ServerLegacy + server Legacy getters
 ├── legacy_provider_settings.go      # SettingsManager-backed getters
 ├── legacy_provider_env.go           # Env-only getters
 ├── crd_provider.go                  # CRDProvider (ErrNotConfigured until CRD wired)
+├── crd_provider_server.go           # Server CRD stubs (ErrNotConfigured)
 ├── hybrid_provider.go               # HybridProvider (CRD → Legacy fallback)
+├── hybrid_provider_server.go        # Server Hybrid getters
 ├── mocks/Provider.go                # mockery-generated mocks.Provider
 └── provider_test.go
 
 controller/
 ├── appcontroller.go                 # Wires NewHybridProvider; call sites use configProvider
 └── legacy_config.go                 # ControllerLegacy implementation
+
+server/
+├── server.go                        # Wires NewHybridProvider; call sites use configProvider
+└── legacy_config.go                 # ServerLegacy implementation
 ```
 
 ## Related

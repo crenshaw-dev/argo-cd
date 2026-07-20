@@ -82,6 +82,32 @@ func TestLegacyProviderControllerLegacyRoundTrip(t *testing.T) {
 	assert.Equal(t, 2*time.Second, jq)
 }
 
+func TestLegacyProviderServerLegacyRoundTrip(t *testing.T) {
+	stub := &stubServerLegacy{
+		insecure:   true,
+		enableGZip: true,
+		listenPort: 8080,
+		baseHRef:   "/argo/",
+	}
+	p := NewLegacyProvider(nil, &LegacyValues{Server: stub})
+
+	b, err := p.Insecure()
+	require.NoError(t, err)
+	assert.True(t, b)
+
+	g, err := p.EnableGZip()
+	require.NoError(t, err)
+	assert.True(t, g)
+
+	port, err := p.ListenPort()
+	require.NoError(t, err)
+	assert.Equal(t, 8080, port)
+
+	href, err := p.BaseHRef()
+	require.NoError(t, err)
+	assert.Equal(t, "/argo/", href)
+}
+
 func TestCRDProviderReturnsErrNotConfigured(t *testing.T) {
 	p := NewCRDProvider(nil)
 
@@ -92,6 +118,12 @@ func TestCRDProviderReturnsErrNotConfigured(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNotConfigured)
 
 	_, err = p.GitRequestTimeout()
+	assert.ErrorIs(t, err, ErrNotConfigured)
+
+	_, err = p.Insecure()
+	assert.ErrorIs(t, err, ErrNotConfigured)
+
+	_, err = p.ListenPort()
 	assert.ErrorIs(t, err, ErrNotConfigured)
 }
 
@@ -196,3 +228,43 @@ func (s *stubControllerLegacy) LegacyPersistResourceHealth() bool    { return s.
 func (s *stubControllerLegacy) LegacyRepoErrorGracePeriod() time.Duration {
 	return s.repoErrorGrace
 }
+
+type stubServerLegacy struct {
+	insecure, enableGZip, disableAuth, enableProxy, syncReplace     bool
+	hydratorEnabled, gitSubmodule, newGitGlob, enableScm, ghMetrics bool
+	dexPlaintext, dexStrictTLS                                      bool
+	listenPort, metricsPort, webhookParallelism, webhookWorkers     int
+	listenHost, metricsHost, staticAssets, dexAddr, baseHRef        string
+	rootPath, xFrame, csp, scmRootCA                                string
+	contentTypes, appNamespaces, k8sEvents, allowedScm              []string
+}
+
+func (s *stubServerLegacy) LegacyInsecure() bool                  { return s.insecure }
+func (s *stubServerLegacy) LegacyContentTypes() []string          { return s.contentTypes }
+func (s *stubServerLegacy) LegacyEnableGZip() bool                { return s.enableGZip }
+func (s *stubServerLegacy) LegacyStaticAssetsDir() string         { return s.staticAssets }
+func (s *stubServerLegacy) LegacyListenHost() string              { return s.listenHost }
+func (s *stubServerLegacy) LegacyListenPort() int                 { return s.listenPort }
+func (s *stubServerLegacy) LegacyMetricsHost() string             { return s.metricsHost }
+func (s *stubServerLegacy) LegacyMetricsPort() int                { return s.metricsPort }
+func (s *stubServerLegacy) LegacyDexServerAddr() string           { return s.dexAddr }
+func (s *stubServerLegacy) LegacyDexServerPlaintext() bool        { return s.dexPlaintext }
+func (s *stubServerLegacy) LegacyDexServerStrictTLS() bool        { return s.dexStrictTLS }
+func (s *stubServerLegacy) LegacyBaseHRef() string                { return s.baseHRef }
+func (s *stubServerLegacy) LegacyRootPath() string                { return s.rootPath }
+func (s *stubServerLegacy) LegacyApplicationNamespaces() []string { return s.appNamespaces }
+func (s *stubServerLegacy) LegacyHydratorEnabled() bool           { return s.hydratorEnabled }
+func (s *stubServerLegacy) LegacyDisableAuth() bool               { return s.disableAuth }
+func (s *stubServerLegacy) LegacyEnableProxyExtension() bool      { return s.enableProxy }
+func (s *stubServerLegacy) LegacyWebhookParallelism() int         { return s.webhookParallelism }
+func (s *stubServerLegacy) LegacyWebhookRefreshWorkers() int      { return s.webhookWorkers }
+func (s *stubServerLegacy) LegacyEnableK8sEvent() []string        { return s.k8sEvents }
+func (s *stubServerLegacy) LegacySyncWithReplaceAllowed() bool    { return s.syncReplace }
+func (s *stubServerLegacy) LegacyXFrameOptions() string           { return s.xFrame }
+func (s *stubServerLegacy) LegacyContentSecurityPolicy() string   { return s.csp }
+func (s *stubServerLegacy) LegacyGitSubmoduleEnabled() bool       { return s.gitSubmodule }
+func (s *stubServerLegacy) LegacyEnableNewGitFileGlobbing() bool  { return s.newGitGlob }
+func (s *stubServerLegacy) LegacyScmRootCAPath() string           { return s.scmRootCA }
+func (s *stubServerLegacy) LegacyAllowedScmProviders() []string   { return s.allowedScm }
+func (s *stubServerLegacy) LegacyEnableScmProviders() bool        { return s.enableScm }
+func (s *stubServerLegacy) LegacyEnableGitHubAPIMetrics() bool    { return s.ghMetrics }

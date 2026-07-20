@@ -69,7 +69,7 @@ func TestUserAgent(t *testing.T) {
 
 	for _, test := range tests {
 		opts := apiclient.ClientOptions{
-			ServerAddr: fmt.Sprintf("localhost:%d", s.ListenPort),
+			ServerAddr: fmt.Sprintf("localhost:%d", mustListenPort(t, s)),
 			PlainText:  true,
 			UserAgent:  test.userAgent,
 		}
@@ -108,7 +108,7 @@ func Test_StaticHeaders(t *testing.T) {
 		// Allow server startup
 		time.Sleep(1 * time.Second)
 
-		url := fmt.Sprintf("http://127.0.0.1:%d/test.html", s.ListenPort)
+		url := fmt.Sprintf("http://127.0.0.1:%d/test.html", mustListenPort(t, s))
 		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, http.NoBody)
 		require.NoError(t, err)
 		resp, err := http.DefaultClient.Do(req)
@@ -138,7 +138,7 @@ func Test_StaticHeaders(t *testing.T) {
 		// Allow server startup
 		time.Sleep(1 * time.Second)
 
-		url := fmt.Sprintf("http://127.0.0.1:%d/test.html", s.ListenPort)
+		url := fmt.Sprintf("http://127.0.0.1:%d/test.html", mustListenPort(t, s))
 		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, http.NoBody)
 		require.NoError(t, err)
 		resp, err := http.DefaultClient.Do(req)
@@ -164,13 +164,13 @@ func Test_StaticHeaders(t *testing.T) {
 		go s.Run(ctx, lns)
 		defer time.Sleep(3 * time.Second)
 
-		err = test.WaitForPortListen(fmt.Sprintf("127.0.0.1:%d", s.ListenPort), 10*time.Second)
+		err = test.WaitForPortListen(fmt.Sprintf("127.0.0.1:%d", mustListenPort(t, s)), 10*time.Second)
 		require.NoError(t, err)
 
 		// Allow server startup
 		time.Sleep(1 * time.Second)
 
-		url := fmt.Sprintf("http://127.0.0.1:%d/test.html", s.ListenPort)
+		url := fmt.Sprintf("http://127.0.0.1:%d/test.html", mustListenPort(t, s))
 		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, http.NoBody)
 		require.NoError(t, err)
 		resp, err := http.DefaultClient.Do(req)
@@ -179,4 +179,11 @@ func Test_StaticHeaders(t *testing.T) {
 		assert.Empty(t, resp.Header.Get("Content-Security-Policy"))
 		require.NoError(t, resp.Body.Close())
 	}
+}
+
+func mustListenPort(t *testing.T, s *FakeArgoCDServer) int {
+	t.Helper()
+	port, err := s.ConfigProvider().ListenPort()
+	require.NoError(t, err)
+	return port
 }
