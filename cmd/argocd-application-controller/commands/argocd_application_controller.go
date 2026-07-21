@@ -249,7 +249,7 @@ func NewCommand() *cobra.Command {
 				cancel()
 			}()
 
-			go appController.Run(ctx, statusProcessors, operationProcessors, hydrationProcessors)
+			go appController.Run(ctx)
 
 			<-ctx.Done()
 

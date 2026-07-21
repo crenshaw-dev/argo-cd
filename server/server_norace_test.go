@@ -203,19 +203,6 @@ func Test_StaticHeaders(t *testing.T) {
 	}
 }
 
-// withStaticHeaderOverrides prepends a Static leaf so header tests can mutate
-// values after NewServer snapshots opts into configProvider.
-func withStaticHeaderOverrides(t *testing.T, s *FakeArgoCDServer, xFrameOptions, contentSecurityPolicy string) {
-	t.Helper()
-	s.configProvider = configbus.NewChainProvider(
-		&configbus.StaticProvider{Fields: configbus.StaticFields{
-			ContentSecurityPolicy: configbus.Ptr(contentSecurityPolicy),
-			XFrameOptions:         configbus.Ptr(xFrameOptions),
-		}},
-		s.configProvider,
-	)
-}
-
 func mustListenPort(t *testing.T, s *FakeArgoCDServer) int {
 	t.Helper()
 	port, err := s.configProvider.ListenPort(context.Background())
