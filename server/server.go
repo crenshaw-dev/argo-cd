@@ -443,48 +443,10 @@ func NewServer(ctx context.Context, opts ArgoCDServerOpts, appsetOpts Applicatio
 		Shutdown:           noopShutdown,
 		stopCh:             make(chan os.Signal, 1),
 	}
-	dexPlaintext, dexStrictTLS := false, false
-	if a.DexTLSConfig != nil {
-		dexPlaintext = a.DexTLSConfig.DisableTLS
-		dexStrictTLS = a.DexTLSConfig.StrictValidation
+	if crd == nil {
+		crd = configbus.TestServerCRDSource()
 	}
-	//nolint:staticcheck // SA1019: StaticFields capture construction-time opts once at wire-up
-	a.configProvider = configbus.NewChainProvider(
-		configbus.NewCRDProvider(crd),
-		&configbus.StaticProvider{Fields: configbus.StaticFields{
-			AllowedScmProviders:      configbus.Ptr(a.AllowedScmProviders),
-			ApplicationNamespaces:    configbus.Ptr(a.ApplicationNamespaces),
-			BaseHRef:                 configbus.Ptr(a.BaseHRef),
-			ContentSecurityPolicy:    configbus.Ptr(a.ContentSecurityPolicy),
-			ContentTypes:             configbus.Ptr(a.ContentTypes),
-			DexServerAddr:            configbus.Ptr(a.DexServerAddr),
-			DexServerPlaintext:       configbus.Ptr(dexPlaintext),
-			DexServerStrictTLS:       configbus.Ptr(dexStrictTLS),
-			DisableAuth:              configbus.Ptr(a.DisableAuth),
-			EnableGZip:               configbus.Ptr(a.EnableGZip),
-			EnableGitHubAPIMetrics:   configbus.Ptr(a.EnableGitHubAPIMetrics),
-			EnableK8sEvent:           configbus.Ptr(a.EnableK8sEvent),
-			EnableNewGitFileGlobbing: configbus.Ptr(a.EnableNewGitFileGlobbing),
-			EnableProxyExtension:     configbus.Ptr(a.EnableProxyExtension),
-			EnableScmProviders:       configbus.Ptr(a.EnableScmProviders),
-			GitSubmoduleEnabled:      configbus.Ptr(a.GitSubmoduleEnabled),
-			HydratorEnabled:          configbus.Ptr(a.HydratorEnabled),
-			Insecure:                 configbus.Ptr(a.Insecure),
-			ListenHost:               configbus.Ptr(a.ListenHost),
-			ListenPort:               configbus.Ptr(a.ListenPort),
-			MetricsHost:              configbus.Ptr(a.MetricsHost),
-			MetricsPort:              configbus.Ptr(a.MetricsPort),
-			RootPath:                 configbus.Ptr(a.RootPath),
-			ScmRootCAPath:            configbus.Ptr(a.ScmRootCAPath),
-			StaticAssetsDir:          configbus.Ptr(a.StaticAssetsDir),
-			SyncWithReplaceAllowed:   configbus.Ptr(a.SyncWithReplaceAllowed),
-			WebhookParallelism:       configbus.Ptr(a.WebhookParallelism),
-			WebhookRefreshWorkers:    configbus.Ptr(a.WebhookRefreshWorkers),
-			XFrameOptions:            configbus.Ptr(a.XFrameOptions),
-		}},
-		configbus.NewSettingsManagerProvider(settingsMgr),
-		configbus.NewEnvProvider(),
-	)
+	a.configProvider = configbus.NewCRDProvider(crd)
 	sg := extension.NewDefaultSettingsGetter(a.configProvider, settingsMgr)
 	a.extensionManager = extension.NewManager(logger, opts.Namespace, sg, ag, pg, dbInstance, enf, ug)
 
@@ -497,75 +459,31 @@ func NewServer(ctx context.Context, opts ArgoCDServerOpts, appsetOpts Applicatio
 	return a
 }
 
-// ensureConfigProvider lazily wires a Static/Env chain. Production always
+// ensureConfigProvider lazily wires a CRD test fixture. Production always
 // constructs the provider in NewServer; unit tests that build ArgoCDServer
 // directly hit this path so configProvider getters remain usable.
 func (a *ArgoCDServer) ensureConfigProvider() {
 	if a.configProvider != nil {
 		return
 	}
-	//nolint:staticcheck // SA1019: StaticFields capture construction-time opts once at wire-up
-	a.configProvider = configbus.NewChainProvider(
-		configbus.NewCRDProvider(nil),
-		&configbus.StaticProvider{Fields: configbus.StaticFields{
-			ApplicationNamespaces: configbus.Ptr(a.ApplicationNamespaces),
-			BaseHRef:              configbus.Ptr(a.BaseHRef),
-			HydratorEnabled:       configbus.Ptr(a.HydratorEnabled),
-			RootPath:              configbus.Ptr(a.RootPath),
-		}},
-		configbus.NewEnvProvider(),
-	)
+	a.configProvider = configbus.NewCRDProvider(configbus.TestServerCRDSource())
 }
 
-// rebuildConfigProviderFromFields rebuilds the production chain from the
-// current struct fields. Tests that mutate deprecated fields after NewServer
-// must call this so StaticProvider sees the updated values.
+// rebuildConfigProviderFromFields rebuilds a CRD Static source from the current
+// struct fields. Tests that mutate deprecated fields after NewServer must call
+// this so Provider getters see the updated values.
 func (a *ArgoCDServer) rebuildConfigProviderFromFields() {
-	settingsMgr, _ := a.configProvider.SettingsManager(context.Background())
-	dexPlaintext, dexStrictTLS := false, false
-	if a.DexTLSConfig != nil {
-		dexPlaintext = a.DexTLSConfig.DisableTLS
-		dexStrictTLS = a.DexTLSConfig.StrictValidation
-	}
-	//nolint:staticcheck // SA1019: StaticFields capture current fields for tests
-	a.configProvider = configbus.NewChainProvider(
-		configbus.NewCRDProvider(nil),
-		&configbus.StaticProvider{Fields: configbus.StaticFields{
-			AllowedScmProviders:       configbus.Ptr(a.AllowedScmProviders),
-			ApplicationNamespaces:     configbus.Ptr(a.ApplicationNamespaces),
-			BaseHRef:                  configbus.Ptr(a.BaseHRef),
-			ContentSecurityPolicy:     configbus.Ptr(a.ContentSecurityPolicy),
-			ContentTypes:              configbus.Ptr(a.ContentTypes),
-			DexServerAddr:             configbus.Ptr(a.DexServerAddr),
-			DexServerPlaintext:        configbus.Ptr(dexPlaintext),
-			DexServerStrictTLS:        configbus.Ptr(dexStrictTLS),
-			DisableAuth:               configbus.Ptr(a.DisableAuth),
-			EnableGZip:                configbus.Ptr(a.EnableGZip),
-			EnableGitHubAPIMetrics:    configbus.Ptr(a.EnableGitHubAPIMetrics),
-			EnableK8sEvent:            configbus.Ptr(a.EnableK8sEvent),
-			EnableNewGitFileGlobbing:  configbus.Ptr(a.EnableNewGitFileGlobbing),
-			EnableProxyExtension:      configbus.Ptr(a.EnableProxyExtension),
-			EnableScmProviders:        configbus.Ptr(a.EnableScmProviders),
-			GitSubmoduleEnabled:       configbus.Ptr(a.GitSubmoduleEnabled),
-			HydratorEnabled:           configbus.Ptr(a.HydratorEnabled),
-			Insecure:                  configbus.Ptr(a.Insecure),
-			ListenHost:                configbus.Ptr(a.ListenHost),
-			ListenPort:                configbus.Ptr(a.ListenPort),
-			MetricsHost:               configbus.Ptr(a.MetricsHost),
-			MetricsPort:               configbus.Ptr(a.MetricsPort),
-			RootPath:                  configbus.Ptr(a.RootPath),
-			ScmRootCAPath:             configbus.Ptr(a.ScmRootCAPath),
-			StaticAssetsDir:           configbus.Ptr(a.StaticAssetsDir),
-			SyncWithReplaceAllowed:    configbus.Ptr(a.SyncWithReplaceAllowed),
-			WebhookParallelism:        configbus.Ptr(a.WebhookParallelism),
-			WebhookRefreshWorkers:     configbus.Ptr(a.WebhookRefreshWorkers),
-			XFrameOptions:             configbus.Ptr(a.XFrameOptions),
-		}},
-		configbus.NewSettingsManagerProvider(settingsMgr),
-		configbus.NewEnvProvider(),
-	)
+	//nolint:staticcheck // SA1019: map deprecated fields into CRD test fixture
+	xfo, csp := a.XFrameOptions, a.ContentSecurityPolicy
+	a.configProvider = configbus.NewCRDProvider(configbus.TestServerCRDSourceFor(configbus.TestServerCRDOptions{
+		XFrameOptions:             &xfo,
+		ContentSecurityPolicy:     &csp,
+		RootPath:                  a.RootPath,
+		BaseHref:                  a.BaseHRef,
+		ApplicationNamespaceGlobs: a.ApplicationNamespaces,
+		ListenPort:                a.ListenPort,
+	}))
 }
-
 
 const (
 	// catches corrupted informer state; see https://github.com/argoproj/argo-cd/issues/4960 for more information
@@ -635,9 +553,9 @@ func (server *ArgoCDServer) logInClusterWarnings() error {
 	}
 	if len(inClusterNames) > 0 {
 		// Don't make this call unless we actually have in-cluster secrets, to save time.
-		inClusterEnabled, err := server.configProvider.InClusterEnabled(context.Background())
+		inClusterEnabled, err := server.settingsMgr.IsInClusterEnabled()
 		if err != nil {
-			return fmt.Errorf("failed to resolve InClusterEnabled: %w", err)
+			return fmt.Errorf("could not check if in-cluster is enabled: %w", err)
 		}
 		if !inClusterEnabled {
 			for _, clusterName := range inClusterNames {
@@ -1056,10 +974,7 @@ func (server *ArgoCDServer) watchSettings() {
 		if !reflect.DeepEqual(prevExtConfig, server.settings.ExtensionConfig) {
 			prevExtConfig = server.settings.ExtensionConfig
 			log.Infof("extensions configs modified. Updating proxy registry...")
-			err := server.extensionManager.UpdateExtensionRegistry(&extension.ExtensionSettings{
-				ExtensionConfig: server.settings.ExtensionConfig,
-				Secrets:         server.settings.Secrets,
-			})
+			err := server.extensionManager.UpdateExtensionRegistry(server.settings)
 			if err != nil {
 				log.Errorf("error updating extensions configs: %s", err)
 			} else {
@@ -1399,7 +1314,7 @@ func (server *ArgoCDServer) newHTTPServer(ctx context.Context, port int, grpcWeb
 			handler: mux,
 			urlToHandler: map[string]http.Handler{
 				"/api/badge":          otelhttp.NewHandler(badge.NewHandler(server.AppClientset, server.Namespace, server.configProvider), "server.ArgoCDServer/badge"),
-				common.LogoutEndpoint: otelhttp.NewHandler(logout.NewHandler(server.sessionMgr, server.configProvider), "server.ArgoCDServer/logout"),
+				common.LogoutEndpoint: otelhttp.NewHandler(logout.NewHandler(server.settingsMgr, server.sessionMgr, server.configProvider), "server.ArgoCDServer/logout"),
 			},
 			contentTypeToHandler: map[string]http.Handler{
 				"application/grpc-web+proto": grpcWebHandler,
@@ -1478,7 +1393,7 @@ func (server *ArgoCDServer) newHTTPServer(ctx context.Context, port int, grpcWeb
 
 	// Webhook handler for git events (Note: cache timeouts are hardcoded because API server does not write to cache and not really using them)
 	argoDB := db.NewDB(server.Namespace, server.settingsMgr, server.KubeClientset)
-	acdWebhookHandler, err := webhook.NewHandler(server.Namespace, server.configProvider, server.AppClientset, server.appLister, server.settings, server.settingsMgr, server.RepoServerCache, server.Cache, argoDB)
+	acdWebhookHandler, err := webhook.NewHandler(server.Namespace, server.configProvider, server.AppClientset, server.appLister, server.settings, server.settingsMgr, server.RepoServerCache, server.Cache, argoDB, server.settingsMgr.GetMaxWebhookPayloadSize(), server.settingsMgr.GetWebhookRefreshJitter(), server.settingsMgr.GetWebhookRefreshJitterThreshold())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create webhook handler: %w", err)
 	}
@@ -1808,11 +1723,11 @@ func (server *ArgoCDServer) Authenticate(ctx context.Context) (context.Context, 
 	}
 
 	if claimsErr != nil {
-		anonymousUserEnabled, err := server.configProvider.AnonymousUserEnabled(ctx)
+		argoCDSettings, err := server.settingsMgr.GetSettings()
 		if err != nil {
-			return ctx, status.Errorf(codes.Internal, "failed to resolve AnonymousUserEnabled: %v", err)
+			return ctx, status.Errorf(codes.Internal, "unable to load settings: %v", err)
 		}
-		if !anonymousUserEnabled {
+		if !argoCDSettings.AnonymousUserEnabled {
 			return ctx, claimsErr
 		}
 		//nolint:staticcheck

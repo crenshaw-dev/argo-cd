@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -162,6 +163,13 @@ func TestGetHydratorCommitMessageTemplate(t *testing.T) {
 	}
 
 	ctrl := newFakeControllerWithResync(t.Context(), &data, time.Minute, nil, errors.New("this should not be called"))
+	if cfg, err := ctrl.configProvider.Configuration(context.Background()); cfg != nil && cfg.Spec.Controller != nil {
+	require.NoError(t, err)
+		if cfg.Spec.Controller.SourceHydrator == nil {
+			cfg.Spec.Controller.SourceHydrator = &v1alpha1.SourceHydratorConfig{}
+		}
+		cfg.Spec.Controller.SourceHydrator.CommitMessageTemplate = settings.CommitMessageTemplate
+	}
 
 	tmpl, err := ctrl.GetHydratorCommitMessageTemplate()
 	require.NoError(t, err)
@@ -206,6 +214,13 @@ func TestGetHydratorReadmeMessageTemplate(t *testing.T) {
 	}
 
 	ctrl := newFakeControllerWithResync(t.Context(), &data, time.Minute, nil, errors.New("this should not be called"))
+	if cfg, err := ctrl.configProvider.Configuration(context.Background()); cfg != nil && cfg.Spec.Controller != nil {
+	require.NoError(t, err)
+		if cfg.Spec.Controller.SourceHydrator == nil {
+			cfg.Spec.Controller.SourceHydrator = &v1alpha1.SourceHydratorConfig{}
+		}
+		cfg.Spec.Controller.SourceHydrator.ReadmeMessageTemplate = readmeTemplate
+	}
 
 	tmpl, err := ctrl.GetHydratorReadmeMessageTemplate()
 	require.NoError(t, err)

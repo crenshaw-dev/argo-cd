@@ -34,6 +34,17 @@ func NewCRDProvider(source CRDSource) *CRDProvider {
 // Ensure CRDProvider implements Provider.
 var _ Provider = (*CRDProvider)(nil)
 
+func (p *CRDProvider) Configuration(_ context.Context) (*v1alpha1.ArgoCDConfiguration, error) {
+	if p == nil || p.source == nil {
+		return nil, ErrNotConfigured
+	}
+	cfg := p.source.Config()
+	if cfg == nil {
+		return nil, ErrNotConfigured
+	}
+	return cfg, nil
+}
+
 func (p *CRDProvider) Subscribe(_ chan<- *settings.ArgoCDSettings) {}
 
 func (p *CRDProvider) Unsubscribe(_ chan<- *settings.ArgoCDSettings) {}
@@ -56,23 +67,20 @@ func (p *CRDProvider) UnsubscribeCRD(subCh chan<- struct{}) {
 	}
 }
 
-func (p *CRDProvider) Configuration(_ context.Context) (*v1alpha1.ArgoCDConfiguration, error) {
-	if p == nil || p.source == nil {
-		return nil, ErrNotConfigured
-	}
-	cfg := p.source.Config()
-	if cfg == nil {
-		return nil, ErrNotConfigured
-	}
-	return cfg, nil
-}
-
 func (p *CRDProvider) AllowedNodeLabels(_ context.Context) ([]string, error) {
 	return requireCRDField(p, "AllowedNodeLabels", crdAllowedNodeLabels)
 }
 
+func (p *CRDProvider) AnonymousUserEnabled(_ context.Context) (bool, error) {
+	return requireCRDField(p, "AnonymousUserEnabled", crdAnonymousUserEnabled)
+}
+
 func (p *CRDProvider) AppInstanceLabelKey(_ context.Context) (string, error) {
 	return requireCRDField(p, "AppInstanceLabelKey", crdAppInstanceLabelKey)
+}
+
+func (p *CRDProvider) ApplicationDeepLinks(_ context.Context) ([]settings.DeepLink, error) {
+	return requireCRDField(p, "ApplicationDeepLinks", crdApplicationLinks)
 }
 
 func (p *CRDProvider) CommitAuthorEmail(_ context.Context) (string, error) {
@@ -83,8 +91,28 @@ func (p *CRDProvider) CommitAuthorName(_ context.Context) (string, error) {
 	return requireCRDField(p, "CommitAuthorName", crdCommitAuthorName)
 }
 
+func (p *CRDProvider) ControllerHydrationProcessors(_ context.Context) (int, error) {
+	return requireCRDField(p, "ControllerHydrationProcessors", crdControllerHydrationProcessors)
+}
+
+func (p *CRDProvider) ControllerOperationProcessors(_ context.Context) (int, error) {
+	return requireCRDField(p, "ControllerOperationProcessors", crdControllerOperationProcessors)
+}
+
+func (p *CRDProvider) ControllerStatusProcessors(_ context.Context) (int, error) {
+	return requireCRDField(p, "ControllerStatusProcessors", crdControllerStatusProcessors)
+}
+
 func (p *CRDProvider) EnabledSourceTypes(_ context.Context) (map[string]bool, error) {
-	return nil, ErrNotConfigured
+	return requireCRDField(p, "EnabledSourceTypes", crdEnabledSourceTypes)
+}
+
+func (p *CRDProvider) ExecEnabled(_ context.Context) (bool, error) {
+	return requireCRDField(p, "ExecEnabled", crdExecEnabled)
+}
+
+func (p *CRDProvider) ExecShells(_ context.Context) ([]string, error) {
+	return requireCRDField(p, "ExecShells", crdExecShells)
 }
 
 func (p *CRDProvider) GitRequestTimeout(_ context.Context) (time.Duration, error) {
@@ -100,16 +128,30 @@ func (p *CRDProvider) HelmSettings(_ context.Context) (*v1alpha1.HelmOptions, er
 }
 
 func (p *CRDProvider) HydratorReadmeTemplate(_ context.Context) (string, error) {
-	return requireCRDField(p, "HydratorReadmeTemplate", crdSourceHydratorReadmeMessageTemplate)
+	v, err := requireCRDField(p, "HydratorReadmeTemplate", crdSourceHydratorReadmeMessageTemplate)
+	if err != nil {
+		return "", err
+	}
+	if v == "" {
+		return settings.DefaultManifestHydrationReadmeTemplate, nil
+	}
+	return v, nil
 }
 
 func (p *CRDProvider) IgnoreNormalizerJQTimeout(_ context.Context) (time.Duration, error) {
 	return requireCRDField(p, "IgnoreNormalizerJQTimeout", crdControllerIgnoreNormalizerJqTimeout)
 }
 
-
 func (p *CRDProvider) IgnoreResourceUpdatesOverrides(_ context.Context) (map[string]v1alpha1.ResourceOverride, error) {
-	return nil, ErrNotConfigured
+	compareOptions, err := p.ResourceCompareOptions(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	resourceOverrides, err := p.ResourceOverrides(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	return settings.BuildIgnoreResourceUpdatesOverrides(compareOptions, resourceOverrides), nil
 }
 
 func (p *CRDProvider) InstallationID(_ context.Context) (string, error) {
@@ -140,6 +182,10 @@ func (p *CRDProvider) PersistResourceHealth(_ context.Context) (bool, error) {
 	return requireCRDField(p, "PersistResourceHealth", crdControllerResourceHealthPersist)
 }
 
+func (p *CRDProvider) ProjectDeepLinks(_ context.Context) ([]settings.DeepLink, error) {
+	return requireCRDField(p, "ProjectDeepLinks", crdProjectLinks)
+}
+
 func (p *CRDProvider) ReconciliationJitter(_ context.Context) (time.Duration, error) {
 	return requireCRDField(p, "ReconciliationJitter", crdReconciliationJitter)
 }
@@ -157,7 +203,11 @@ func (p *CRDProvider) ResourceCompareOptions(_ context.Context) (settings.ArgoCD
 }
 
 func (p *CRDProvider) ResourceCustomLabels(_ context.Context) ([]string, error) {
-	return nil, ErrNotConfigured
+	return requireCRDField(p, "ResourceCustomLabels", crdResourceCustomLabels)
+}
+
+func (p *CRDProvider) ResourceDeepLinks(_ context.Context) ([]settings.DeepLink, error) {
+	return requireCRDField(p, "ResourceDeepLinks", crdResourceLinks)
 }
 
 func (p *CRDProvider) ResourceOverrides(_ context.Context) (map[string]v1alpha1.ResourceOverride, error) {
@@ -173,7 +223,7 @@ func (p *CRDProvider) RespectRBAC(_ context.Context) (int, error) {
 }
 
 func (p *CRDProvider) SelfHealBackoff(_ context.Context) (*wait.Backoff, error) {
-	return nil, ErrNotConfigured
+	return requireCRDField(p, "SelfHealBackoff", crdSelfHealBackoff)
 }
 
 func (p *CRDProvider) SelfHealTimeout(_ context.Context) (time.Duration, error) {
@@ -181,15 +231,26 @@ func (p *CRDProvider) SelfHealTimeout(_ context.Context) (time.Duration, error) 
 }
 
 func (p *CRDProvider) SensitiveAnnotations(_ context.Context) (map[string]bool, error) {
-	return nil, ErrNotConfigured
+	return requireCRDField(p, "SensitiveAnnotations", crdSensitiveAnnotations)
 }
 
 func (p *CRDProvider) ServerSideDiff(_ context.Context) (bool, error) {
 	return requireCRDField(p, "ServerSideDiff", crdControllerDiffServerSide)
 }
 
+func (p *CRDProvider) StatusBadgeEnabled(_ context.Context) (bool, error) {
+	return requireCRDField(p, "StatusBadgeEnabled", crdStatusBadgeEnabled)
+}
+
 func (p *CRDProvider) SourceHydratorCommitMessageTemplate(_ context.Context) (string, error) {
-	return requireCRDField(p, "SourceHydratorCommitMessageTemplate", crdSourceHydratorCommitMessageTemplate)
+	v, err := requireCRDField(p, "SourceHydratorCommitMessageTemplate", crdSourceHydratorCommitMessageTemplate)
+	if err != nil {
+		return "", err
+	}
+	if v == "" {
+		return settings.CommitMessageTemplate, nil
+	}
+	return v, nil
 }
 
 func (p *CRDProvider) SyncTimeout(_ context.Context) (time.Duration, error) {
@@ -237,11 +298,11 @@ func (p *CRDProvider) ApplicationsetGitSubmoduleEnabled(_ context.Context) (bool
 }
 
 func (p *CRDProvider) ApplicationsetGlobalPreservedAnnotations(_ context.Context) ([]string, error) {
-	return nil, ErrNotConfigured
+	return requireCRDField(p, "ApplicationsetGlobalPreservedAnnotations", crdApplicationsetGlobalPreservedAnnotations)
 }
 
 func (p *CRDProvider) ApplicationsetGlobalPreservedLabels(_ context.Context) ([]string, error) {
-	return nil, ErrNotConfigured
+	return requireCRDField(p, "ApplicationsetGlobalPreservedLabels", crdApplicationsetGlobalPreservedLabels)
 }
 
 func (p *CRDProvider) ApplicationsetMaxResourcesStatusCount(_ context.Context) (int, error) {
@@ -257,7 +318,7 @@ func (p *CRDProvider) ApplicationsetMetricsApplicationsetLabels(_ context.Contex
 }
 
 func (p *CRDProvider) ApplicationsetNamespaces(_ context.Context) ([]string, error) {
-	return nil, ErrNotConfigured
+	return requireCRDField(p, "ApplicationsetNamespaces", crdApplicationsetNamespaces)
 }
 
 func (p *CRDProvider) ApplicationsetPolicy(_ context.Context) (string, error) {
@@ -341,6 +402,10 @@ func (p *CRDProvider) NotificationsConfigMapName(_ context.Context) (string, err
 	return requireCRDField(p, "NotificationsConfigMapName", crdNotificationsConfigMapName)
 }
 
+func (p *CRDProvider) NotificationsProcessorsCount(_ context.Context) (int, error) {
+	return requireCRDField(p, "NotificationsProcessorsCount", crdNotificationscontrollerProcessorsCount)
+}
+
 func (p *CRDProvider) NotificationsSecretName(_ context.Context) (string, error) {
 	return requireCRDField(p, "NotificationsSecretName", crdNotificationsSecretName)
 }
@@ -358,7 +423,7 @@ func (p *CRDProvider) AllowOutOfBoundsSymlinks(_ context.Context) (bool, error) 
 }
 
 func (p *CRDProvider) CMPTarExcludedGlobs(_ context.Context) ([]string, error) {
-	return nil, ErrNotConfigured
+	return requireCRDField(p, "CMPTarExcludedGlobs", crdReposerverCMPTarExcludedGlobs)
 }
 
 func (p *CRDProvider) CMPUseManifestGeneratePaths(_ context.Context) (bool, error) {
@@ -406,7 +471,7 @@ func (p *CRDProvider) OCIManifestMaxExtractedSize(_ context.Context) (int64, err
 }
 
 func (p *CRDProvider) OCIMediaTypes(_ context.Context) ([]string, error) {
-	return nil, ErrNotConfigured
+	return requireCRDField(p, "OCIMediaTypes", crdReposerverOCIMediaTypes)
 }
 
 func (p *CRDProvider) ParallelismLimit(_ context.Context) (int64, error) {
@@ -454,7 +519,7 @@ func (p *CRDProvider) SubmoduleEnabled(_ context.Context) (bool, error) {
 // ---------------------------------------------------------------------------
 
 func (p *CRDProvider) AllowedScmProviders(_ context.Context) ([]string, error) {
-	return nil, ErrNotConfigured
+	return requireCRDField(p, "AllowedScmProviders", crdApplicationsetAllowedScmProviders)
 }
 
 func (p *CRDProvider) ApplicationNamespaces(_ context.Context) ([]string, error) {
@@ -470,7 +535,7 @@ func (p *CRDProvider) ContentSecurityPolicy(_ context.Context) (string, error) {
 }
 
 func (p *CRDProvider) ContentTypes(_ context.Context) ([]string, error) {
-	return nil, ErrNotConfigured
+	return requireCRDField(p, "ContentTypes", crdServerContentTypes)
 }
 
 func (p *CRDProvider) DexServerAddr(_ context.Context) (string, error) {
@@ -494,7 +559,7 @@ func (p *CRDProvider) EnableGZip(_ context.Context) (bool, error) {
 }
 
 func (p *CRDProvider) EnableGitHubAPIMetrics(_ context.Context) (bool, error) {
-	return false, ErrNotConfigured
+	return requireCRDField(p, "EnableGitHubAPIMetrics", crdApplicationsetEnableGithubApiMetrics)
 }
 
 func (p *CRDProvider) EnableK8sEvent(_ context.Context) ([]string, error) {
@@ -502,7 +567,7 @@ func (p *CRDProvider) EnableK8sEvent(_ context.Context) ([]string, error) {
 }
 
 func (p *CRDProvider) EnableNewGitFileGlobbing(_ context.Context) (bool, error) {
-	return false, ErrNotConfigured
+	return requireCRDField(p, "EnableNewGitFileGlobbing", crdApplicationsetEnableNewGitFileGlobbing)
 }
 
 func (p *CRDProvider) EnableProxyExtension(_ context.Context) (bool, error) {
@@ -510,11 +575,11 @@ func (p *CRDProvider) EnableProxyExtension(_ context.Context) (bool, error) {
 }
 
 func (p *CRDProvider) EnableScmProviders(_ context.Context) (bool, error) {
-	return false, ErrNotConfigured
+	return requireCRDField(p, "EnableScmProviders", crdApplicationsetEnableScmProviders)
 }
 
 func (p *CRDProvider) GitSubmoduleEnabled(_ context.Context) (bool, error) {
-	return false, ErrNotConfigured
+	return requireCRDField(p, "GitSubmoduleEnabled", crdApplicationsetEnableGitSubmodule)
 }
 
 func (p *CRDProvider) HydratorEnabled(_ context.Context) (bool, error) {
@@ -546,7 +611,7 @@ func (p *CRDProvider) RootPath(_ context.Context) (string, error) {
 }
 
 func (p *CRDProvider) ScmRootCAPath(_ context.Context) (string, error) {
-	return "", ErrNotConfigured
+	return requireCRDField(p, "ScmRootCAPath", crdApplicationsetScmRootCaPath)
 }
 
 func (p *CRDProvider) StaticAssetsDir(_ context.Context) (string, error) {

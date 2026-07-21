@@ -1,0 +1,119 @@
+# E2E baseline ArgoCDConfiguration singleton for CRD-only (layer 09).
+# Keep in sync with fixture.e2eBaselineArgoCDConfiguration().
+apiVersion: argoproj.io/v1alpha1
+kind: ArgoCDConfiguration
+metadata:
+  name: argocd-config
+spec:
+  applicationNamespaceGlobs:
+    - argocd-e2e-external
+    - argocd-e2e-external-2
+  server:
+    tlsEnabled: false
+    authEnabled: true
+    compression: gzip
+    baseHref: /
+    staticAssetsPath: /tmp/static
+    xFrameOptions: sameorigin
+    contentSecurityPolicy: "frame-ancestors 'self';"
+    apiContentTypes:
+      - application/json
+    syncReplaceAllowed: true
+    proxyExtensionEnabled: false
+    listen:
+      address: "0.0.0.0"
+      port: 8080
+      metricsAddress: "0.0.0.0"
+      metricsPort: 8083
+    dexConnection:
+      address: http://localhost:5556
+      tlsEnabled: false
+    webhook:
+      parallelismLimit: 50
+      refresh:
+        workers: 5
+  controller:
+    instanceLabelKey: app.kubernetes.io/instance
+    resourceTrackingMethod: annotation
+    resourceHealthPersist: true
+    repoErrorGracePeriod: 90s
+    reconciliation:
+      timeout: 120s
+      hardTimeout: 300s
+      jitter: 60s
+    selfHeal:
+      timeout: 30s
+    sync:
+      timeout: 5m
+      impersonation:
+        mode: disabled
+    processors:
+      status: 20
+      operation: 10
+      hydration: 5
+    diff:
+      serverSide:
+        enabled: false
+      ignoreNormalizerJQTimeout: 2s
+    sourceHydrator:
+      enabled: true
+    metrics:
+      cluster:
+        labelKeys:
+          - team
+  repoServer:
+    parallelismLimit: 1
+    allowOOBSymlinks: false
+    includeHiddenDirectories: false
+    maxCombinedDirectoryManifestsSize: 10M
+    revisionCacheLockTimeout: 15s
+    cache:
+      repoExpiration: 2h
+    git:
+      submoduleEnabled: false
+      builtinConfigEnabled: false
+    helm:
+      userAgent: argocd-e2e
+      enabled: true
+      manifest:
+        maxExtractedSize: "0"
+        maxExtractedSizeEnabled: true
+    kustomize:
+      enabled: true
+    jsonnet:
+      enabled: true
+    oci:
+      layerMediaTypes:
+        - application/vnd.oci.image.layer.v1.tar
+      manifest:
+        maxExtractedSize: "0"
+        maxExtractedSizeEnabled: true
+    streamedManifest:
+      maxTarSize: "0"
+      maxExtractedSize: "0"
+    plugin:
+      useManifestGeneratePaths: false
+  applicationSet:
+    allowedSCMProviderURLs:
+      - http://127.0.0.1:8341
+      - http://127.0.0.1:8342
+      - http://127.0.0.1:8343
+      - http://127.0.0.1:8344
+    scmProvidersEnabled: true
+    gitHubAPIMetricsEnabled: false
+    gitSubmoduleEnabled: true
+    newGitFileGlobbingEnabled: false
+    scmRootCAPath: ""
+    namespaceGlobs:
+      - argocd-e2e-external
+      - argocd-e2e-external-2
+    progressiveSyncs:
+      enabled: true
+    tokenRefStrictModeEnabled: true
+  notifications:
+    selfServiceEnabled: false
+    processorsCount: 10
+    configMapName: argocd-notifications-cm
+    secretName: argocd-notifications-secret
+    repoServerAddress: localhost:8081
+    tlsEnabled: false

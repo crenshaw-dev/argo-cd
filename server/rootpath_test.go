@@ -11,6 +11,14 @@ import (
 	"github.com/argoproj/argo-cd/v3/util/configbus"
 )
 
+func testServerWithRootPath(rootPath string) *ArgoCDServer {
+	server := &ArgoCDServer{}
+	server.configProvider = configbus.NewCRDProvider(configbus.TestServerCRDSourceFor(configbus.TestServerCRDOptions{
+		RootPath: rootPath,
+	}))
+	return server
+}
+
 // TestWithRootPathEmptyRootPath tests that withRootPath returns the original handler when RootPath is empty
 func TestWithRootPathEmptyRootPath(t *testing.T) {
 	t.Parallel()
@@ -19,10 +27,7 @@ func TestWithRootPathEmptyRootPath(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	server := &ArgoCDServer{}
-	server.configProvider = &configbus.StaticProvider{Fields: configbus.StaticFields{
-		RootPath: configbus.Ptr(""),
-	}}
+	server := testServerWithRootPath("")
 
 	// Call withRootPath
 	handler, err := withRootPath(originalHandler, server)
@@ -42,10 +47,7 @@ func TestWithRootPathNonEmptyRootPath(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	server := &ArgoCDServer{}
-	server.configProvider = &configbus.StaticProvider{Fields: configbus.StaticFields{
-		RootPath: configbus.Ptr("/argocd"),
-	}}
+	server := testServerWithRootPath("/argocd")
 
 	// Call withRootPath
 	handler, err := withRootPath(originalHandler, server)

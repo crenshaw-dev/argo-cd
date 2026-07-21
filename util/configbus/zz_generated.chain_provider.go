@@ -326,6 +326,24 @@ func (c *ChainProvider) ContentTypes(ctx context.Context) ([]string, error) {
 	}, c.links)
 }
 
+func (c *ChainProvider) ControllerHydrationProcessors(ctx context.Context) (int, error) {
+	return firstConfigured(func(p Provider) (int, error) {
+		return p.ControllerHydrationProcessors(ctx)
+	}, c.links)
+}
+
+func (c *ChainProvider) ControllerOperationProcessors(ctx context.Context) (int, error) {
+	return firstConfigured(func(p Provider) (int, error) {
+		return p.ControllerOperationProcessors(ctx)
+	}, c.links)
+}
+
+func (c *ChainProvider) ControllerStatusProcessors(ctx context.Context) (int, error) {
+	return firstConfigured(func(p Provider) (int, error) {
+		return p.ControllerStatusProcessors(ctx)
+	}, c.links)
+}
+
 func (c *ChainProvider) DexServerAddr(ctx context.Context) (string, error) {
 	return firstConfigured(func(p Provider) (string, error) {
 		return p.DexServerAddr(ctx)
@@ -640,6 +658,12 @@ func (c *ChainProvider) NotificationsApplicationNamespaces(ctx context.Context) 
 func (c *ChainProvider) NotificationsConfigMapName(ctx context.Context) (string, error) {
 	return firstConfigured(func(p Provider) (string, error) {
 		return p.NotificationsConfigMapName(ctx)
+	}, c.links)
+}
+
+func (c *ChainProvider) NotificationsProcessorsCount(ctx context.Context) (int, error) {
+	return firstConfigured(func(p Provider) (int, error) {
+		return p.NotificationsProcessorsCount(ctx)
 	}, c.links)
 }
 

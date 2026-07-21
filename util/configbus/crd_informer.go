@@ -2,6 +2,7 @@ package configbus
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -19,7 +20,6 @@ import (
 type InformerCRDSource struct {
 	mu          sync.RWMutex
 	current     *appv1.ArgoCDConfiguration
-	synced      cache.InformerSynced
 	subscribers []chan<- struct{}
 }
 
@@ -32,11 +32,10 @@ type CRDChangeNotifier interface {
 
 // NewInformerCRDSource starts a namespaced informer for ArgoCDConfiguration and
 // returns a CRDSource backed by its cache. Callers should cancel ctx on shutdown.
-// If the CRD is not installed, WaitForCacheSync may fail — callers should treat
-// that as a soft error and fall back to nil CRDSource.
+// If the CRD is not installed, WaitForCacheSync may fail.
 func NewInformerCRDSource(ctx context.Context, client appclientset.Interface, namespace string) (*InformerCRDSource, error) {
 	if client == nil {
-		return nil, fmt.Errorf("config: application clientset is nil")
+		return nil, errors.New("config: application clientset is nil")
 	}
 	src := &InformerCRDSource{}
 	factory := appinformer.NewSharedInformerFactoryWithOptions(
@@ -56,16 +55,21 @@ func NewInformerCRDSource(ctx context.Context, client appclientset.Interface, na
 	}
 
 	factory.Start(ctx.Done())
-	src.synced = informer.HasSynced
 	if !cache.WaitForCacheSync(ctx.Done(), informer.HasSynced) {
-		return nil, fmt.Errorf("config: timed out waiting for ArgoCDConfiguration informer sync")
+		return nil, errors.New("config: timed out waiting for ArgoCDConfiguration informer sync")
 	}
 	return src, nil
 }
 
-// NewOptionalInformerCRDSource starts an ArgoCDConfiguration informer and returns
-// it as a CRDSource. On failure (e.g. CRD not installed), logs a warning and
-// returns nil so callers keep the legacy-only Provider path.
+// NewRequiredInformerCRDSource starts an ArgoCDConfiguration informer and returns
+// it as a CRDSource. On failure (e.g. CRD not installed or sync timeout), returns
+// an error — components must not start without a working CRD config source.
+func NewRequiredInformerCRDSource(ctx context.Context, client appclientset.Interface, namespace string) (CRDSource, error) {
+	return NewInformerCRDSource(ctx, client, namespace)
+}
+
+// NewOptionalInformerCRDSource is deprecated for production; use NewRequiredInformerCRDSource.
+// It still returns nil on failure for tests and gradual migration helpers.
 func NewOptionalInformerCRDSource(ctx context.Context, client appclientset.Interface, namespace string) CRDSource {
 	src, err := NewInformerCRDSource(ctx, client, namespace)
 	if err != nil {

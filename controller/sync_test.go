@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"os"
 	"strconv"
 	"testing"
@@ -1859,6 +1860,16 @@ func TestSyncWithImpersonate(t *testing.T) {
 			additionalObjs: additionalObjs,
 		}
 		ctrl := newFakeController(t.Context(), &data, nil)
+		if impersonationEnabled {
+			if cfg, err := ctrl.configProvider.Configuration(context.Background()); cfg != nil && cfg.Spec.Controller != nil {
+			require.NoError(t, err)
+				if cfg.Spec.Controller.Sync == nil {
+					cfg.Spec.Controller.Sync = &v1alpha1.ApplicationSyncConfig{}
+				}
+				// CM-only "enabled" historically implied enforced=true (required).
+				cfg.Spec.Controller.Sync.Impersonation = &v1alpha1.SyncImpersonationConfig{Mode: "required"}
+			}
+		}
 		return &fixture{
 			application: app,
 			project:     project,
@@ -1986,6 +1997,13 @@ func TestSyncWithImpersonate(t *testing.T) {
 			additionalObjs: []runtime.Object{},
 		}
 		ctrl := newFakeController(t.Context(), &data, nil)
+		if cfg, err := ctrl.configProvider.Configuration(context.Background()); cfg != nil && cfg.Spec.Controller != nil {
+		require.NoError(t, err)
+			if cfg.Spec.Controller.Sync == nil {
+				cfg.Spec.Controller.Sync = &v1alpha1.ApplicationSyncConfig{}
+			}
+			cfg.Spec.Controller.Sync.Impersonation = &v1alpha1.SyncImpersonationConfig{Mode: "optional"}
+		}
 		opMessage := "successfully synced (no more tasks)"
 
 		opState := &v1alpha1.OperationState{
@@ -2046,6 +2064,13 @@ func TestSyncWithImpersonate(t *testing.T) {
 			additionalObjs: []runtime.Object{syncServiceAccount},
 		}
 		ctrl := newFakeController(t.Context(), &data, nil)
+		if cfg, err := ctrl.configProvider.Configuration(context.Background()); cfg != nil && cfg.Spec.Controller != nil {
+		require.NoError(t, err)
+			if cfg.Spec.Controller.Sync == nil {
+				cfg.Spec.Controller.Sync = &v1alpha1.ApplicationSyncConfig{}
+			}
+			cfg.Spec.Controller.Sync.Impersonation = &v1alpha1.SyncImpersonationConfig{Mode: "optional"}
+		}
 		opMessage := "successfully synced (no more tasks)"
 
 		opState := &v1alpha1.OperationState{

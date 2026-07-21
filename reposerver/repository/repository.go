@@ -185,36 +185,10 @@ func NewService(metricsServer *metrics.MetricsServer, cache *cache.Cache, initCo
 		symlinksState:      gocache.New(12*time.Hour, time.Hour),
 	}
 	//nolint:staticcheck // SA1019: StaticFields capture construction-time opts once at wire-up
-	s.configProvider = configbus.NewChainProvider(
-		configbus.NewCRDProvider(crd),
-		&configbus.StaticProvider{Fields: configbus.StaticFields{
-			AllowOutOfBoundsSymlinks:                     configbus.Ptr(initConstants.AllowOutOfBoundsSymlinks),
-			CMPTarExcludedGlobs:                          configbus.Ptr(initConstants.CMPTarExcludedGlobs),
-			CMPUseManifestGeneratePaths:                  configbus.Ptr(initConstants.CMPUseManifestGeneratePaths),
-			DisableHelmManifestMaxExtractedSize:          configbus.Ptr(initConstants.DisableHelmManifestMaxExtractedSize),
-			DisableOCIManifestMaxExtractedSize:           configbus.Ptr(initConstants.DisableOCIManifestMaxExtractedSize),
-			EnableBuiltinGitConfig:                       configbus.Ptr(initConstants.EnableBuiltinGitConfig),
-			HelmChartCacheExpiration:                     configbus.Ptr(initConstants.HelmChartCacheExpiration),
-			HelmManifestMaxExtractedSize:                  configbus.Ptr(initConstants.HelmManifestMaxExtractedSize),
-			HelmRegistryMaxIndexSize:                      configbus.Ptr(initConstants.HelmRegistryMaxIndexSize),
-			HelmUserAgent:                                 configbus.Ptr(initConstants.HelmUserAgent),
-			IncludeHiddenDirectories:                     configbus.Ptr(initConstants.IncludeHiddenDirectories),
-			MaxCombinedDirectoryManifestsSize:            configbus.Ptr(initConstants.MaxCombinedDirectoryManifestsSize),
-			OCIManifestMaxExtractedSize:                  configbus.Ptr(initConstants.OCIManifestMaxExtractedSize),
-			OCIMediaTypes:                                configbus.Ptr(initConstants.OCIMediaTypes),
-			ParallelismLimit:                             configbus.Ptr(initConstants.ParallelismLimit),
-			PauseGenerationAfterFailedGenerationAttempts: configbus.Ptr(initConstants.PauseGenerationAfterFailedGenerationAttempts),
-			PauseGenerationOnFailureForMinutes:           configbus.Ptr(initConstants.PauseGenerationOnFailureForMinutes),
-			PauseGenerationOnFailureForRequests:          configbus.Ptr(initConstants.PauseGenerationOnFailureForRequests),
-			RepoCacheExpiration:                          configbus.Ptr(cache.LegacyRepoCacheExpiration()),
-			RevisionCacheExpiration:                      configbus.Ptr(cache.LegacyRevisionCacheExpiration()),
-			RevisionCacheLockTimeout:                     configbus.Ptr(cache.LegacyRevisionCacheLockTimeout()),
-			StreamedManifestMaxExtractedSize:             configbus.Ptr(initConstants.StreamedManifestMaxExtractedSize),
-			StreamedManifestMaxTarSize:                   configbus.Ptr(initConstants.StreamedManifestMaxTarSize),
-			SubmoduleEnabled:                             configbus.Ptr(initConstants.SubmoduleEnabled),
-		}},
-		configbus.NewEnvProvider(),
-	)
+	if crd == nil {
+		crd = configbus.TestReposerverCRDSource()
+	}
+	s.configProvider = configbus.NewCRDProvider(crd)
 	cache.SetConfigProvider(s.configProvider)
 
 	// Size the operation semaphore from the Provider (Legacy → initConstants).

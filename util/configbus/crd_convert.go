@@ -44,9 +44,11 @@ func crdResourcesFilter(cfg *appv1.ArgoCDConfiguration) (*settings.ResourcesFilt
 }
 
 func crdResourcesFilterExclusions(cfg *appv1.ArgoCDConfiguration) (*settings.ResourcesFilter, bool) {
-	if cfg == nil || cfg.Spec.Controller == nil || cfg.Spec.Controller.Resource == nil ||
-		cfg.Spec.Controller.Resource.Exclusions == nil {
+	if cfg == nil || cfg.Spec.Controller == nil {
 		return nil, false
+	}
+	if cfg.Spec.Controller.Resource == nil {
+		return &settings.ResourcesFilter{}, true
 	}
 	r := cfg.Spec.Controller.Resource
 	return &settings.ResourcesFilter{

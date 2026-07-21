@@ -62,49 +62,70 @@ func (c *SCMConfig) SetConfigProvider(p configbus.Provider) {
 
 func (c *SCMConfig) enableSCMProvidersResolved() (bool, error) {
 	if c.configProvider != nil {
-		return c.configProvider.ApplicationsetEnableScmProviders(context.Background())
+		v, err := c.configProvider.ApplicationsetEnableScmProviders(context.Background())
+		if err == nil || !errors.Is(err, configbus.ErrNotConfigured) {
+			return v, err
+		}
 	}
 	return c.LegacyEnableSCMProviders(), nil
 }
 
 func (c *SCMConfig) allowedSCMProvidersResolved() ([]string, error) {
 	if c.configProvider != nil {
-		return c.configProvider.ApplicationsetAllowedScmProviders(context.Background())
+		v, err := c.configProvider.ApplicationsetAllowedScmProviders(context.Background())
+		if err == nil || !errors.Is(err, configbus.ErrNotConfigured) {
+			return v, err
+		}
 	}
 	return c.LegacyAllowedSCMProviders(), nil
 }
 
 func (c *SCMConfig) tokenRefStrictModeResolved() (bool, error) {
 	if c.configProvider != nil {
-		return c.configProvider.ApplicationsetTokenRefStrictMode(context.Background())
+		v, err := c.configProvider.ApplicationsetTokenRefStrictMode(context.Background())
+		if err == nil || !errors.Is(err, configbus.ErrNotConfigured) {
+			return v, err
+		}
 	}
 	return c.LegacyTokenRefStrictMode(), nil
 }
 
 func (c *SCMConfig) scmRootCAPathResolved() (string, error) {
 	if c.configProvider != nil {
-		return c.configProvider.ApplicationsetScmRootCAPath(context.Background())
+		v, err := c.configProvider.ApplicationsetScmRootCAPath(context.Background())
+		if err == nil || !errors.Is(err, configbus.ErrNotConfigured) {
+			return v, err
+		}
 	}
 	return c.LegacyScmRootCAPath(), nil
 }
 
 func (c *SCMConfig) scmProxyURLResolved() (string, error) {
 	if c.configProvider != nil {
-		return c.configProvider.ApplicationsetScmProxyURL(context.Background())
+		v, err := c.configProvider.ApplicationsetScmProxyURL(context.Background())
+		if err == nil || !errors.Is(err, configbus.ErrNotConfigured) {
+			return v, err
+		}
 	}
 	return c.LegacyScmProxyURL(), nil
 }
 
 func (c *SCMConfig) scmNoProxyResolved() (string, error) {
 	if c.configProvider != nil {
-		return c.configProvider.ApplicationsetScmNoProxy(context.Background())
+		v, err := c.configProvider.ApplicationsetScmNoProxy(context.Background())
+		if err == nil || !errors.Is(err, configbus.ErrNotConfigured) {
+			return v, err
+		}
 	}
 	return c.LegacyScmNoProxy(), nil
 }
 
 func (c *SCMConfig) enableGitHubAPIMetricsResolved() (bool, error) {
 	if c.configProvider != nil {
-		return c.configProvider.ApplicationsetEnableGitHubAPIMetrics(context.Background())
+		v, err := c.configProvider.ApplicationsetEnableGitHubAPIMetrics(context.Background())
+		if err == nil || !errors.Is(err, configbus.ErrNotConfigured) {
+			return v, err
+		}
 	}
 	return c.LegacyEnableGitHubAPIMetrics(), nil
 }

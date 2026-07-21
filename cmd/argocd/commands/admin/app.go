@@ -371,25 +371,17 @@ func reconcileApplications(
 	ignoreNormalizerOpts normalizers.IgnoreNormalizerOpts,
 ) ([]appReconcileResult, error) {
 	settingsMgr := settings.NewSettingsManager(ctx, kubeClientset, namespace)
-	// CLI flags override Diff-related settings via a leading StaticProvider.
+	// CLI flags override Diff-related settings on the test CRD fixture.
 	// Temporary: once config is fully CRD-backed these admin flags go away.
-	// Trailing Static mirrors the former admin NewAppStateManager literals
-	// (persistResourceHealth=false, statusRefreshTimeout=1s, repoErrorGracePeriod=0)
-	// so reconcile behavior matches pre-configbus admin.
-	configProvider := configbus.NewChainProvider(
-		&configbus.StaticProvider{Fields: configbus.StaticFields{
-			IgnoreNormalizerJQTimeout: configbus.Ptr(ignoreNormalizerOpts.JQExecutionTimeout),
-			ServerSideDiff:            configbus.Ptr(serverSideDiff),
-		}},
-		configbus.NewCRDProvider(nil),
-		configbus.NewSettingsManagerProvider(settingsMgr),
-		configbus.NewEnvProvider(),
-		&configbus.StaticProvider{Fields: configbus.StaticFields{
-			PersistResourceHealth: configbus.Ptr(false),
-			ReconciliationTimeout: configbus.Ptr(time.Second),
-			RepoErrorGracePeriod:  configbus.Ptr(time.Duration(0)),
-		}},
-	)
+	configProvider := configbus.NewCRDProvider(configbus.TestControllerCRDSource())
+	if cfg, err := configProvider.Configuration(ctx); err == nil && cfg != nil && cfg.Spec.Controller != nil {
+		if cfg.Spec.Controller.Diff == nil {
+			cfg.Spec.Controller.Diff = &v1alpha1.ControllerDiffConfig{}
+		}
+		ssd := serverSideDiff
+		cfg.Spec.Controller.Diff.ServerSide = &v1alpha1.DiffServerSideConfig{Enabled: &ssd}
+		cfg.Spec.Controller.Diff.IgnoreNormalizerJQTimeout = &metav1.Duration{Duration: ignoreNormalizerOpts.JQExecutionTimeout}
+	}
 	argoDB := db.NewDB(namespace, settingsMgr, kubeClientset)
 	appInformerFactory := appinformers.NewSharedInformerFactoryWithOptions(
 		appClientset,

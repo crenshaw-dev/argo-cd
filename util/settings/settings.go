@@ -1022,8 +1022,21 @@ func (mgr *SettingsManager) GetIgnoreResourceUpdatesOverrides() (map[string]v1al
 		return nil, fmt.Errorf("failed to get resource overrides: %w", err)
 	}
 
+	return BuildIgnoreResourceUpdatesOverrides(compareOptions, resourceOverrides), nil
+}
+
+// BuildIgnoreResourceUpdatesOverrides merges per-GVK ignoreResourceUpdates rules with
+// optional ignoreDifferences (when IgnoreDifferencesOnResourceUpdates) and always
+// appends metadata JSON pointers used by the cluster cache. The result is a new map;
+// IgnoreResourceUpdates fields are cleared because Normalizers read IgnoreDifferences.
+func BuildIgnoreResourceUpdatesOverrides(compareOptions ArgoCDDiffOptions, resourceOverrides map[string]v1alpha1.ResourceOverride) map[string]v1alpha1.ResourceOverride {
+	out := make(map[string]v1alpha1.ResourceOverride, len(resourceOverrides))
 	for k, v := range resourceOverrides {
-		resourceUpdates := v.IgnoreResourceUpdates
+		resourceUpdates := v1alpha1.OverrideIgnoreDiff{
+			JSONPointers:          append([]string(nil), v.IgnoreResourceUpdates.JSONPointers...),
+			JQPathExpressions:     append([]string(nil), v.IgnoreResourceUpdates.JQPathExpressions...),
+			ManagedFieldsManagers: append([]string(nil), v.IgnoreResourceUpdates.ManagedFieldsManagers...),
+		}
 		if compareOptions.IgnoreDifferencesOnResourceUpdates {
 			resourceUpdates.JQPathExpressions = append(resourceUpdates.JQPathExpressions, v.IgnoreDifferences.JQPathExpressions...)
 			resourceUpdates.JSONPointers = append(resourceUpdates.JSONPointers, v.IgnoreDifferences.JSONPointers...)
@@ -1032,18 +1045,18 @@ func (mgr *SettingsManager) GetIgnoreResourceUpdatesOverrides() (map[string]v1al
 		// Set the IgnoreDifferences because these are the overrides used by Normalizers
 		v.IgnoreDifferences = resourceUpdates
 		v.IgnoreResourceUpdates = v1alpha1.OverrideIgnoreDiff{}
-		resourceOverrides[k] = v
+		out[k] = v
 	}
 
 	if compareOptions.IgnoreDifferencesOnResourceUpdates {
 		log.Info("Using diffing customizations to ignore resource updates")
 	}
 
-	addIgnoreDiffItemOverrideToGK(resourceOverrides, "*/*", "/metadata/resourceVersion")
-	addIgnoreDiffItemOverrideToGK(resourceOverrides, "*/*", "/metadata/generation")
-	addIgnoreDiffItemOverrideToGK(resourceOverrides, "*/*", "/metadata/managedFields")
+	addIgnoreDiffItemOverrideToGK(out, "*/*", "/metadata/resourceVersion")
+	addIgnoreDiffItemOverrideToGK(out, "*/*", "/metadata/generation")
+	addIgnoreDiffItemOverrideToGK(out, "*/*", "/metadata/managedFields")
 
-	return resourceOverrides, nil
+	return out
 }
 
 // Deprecated: use configbus.Provider.IsIgnoreResourceUpdatesEnabled instead.

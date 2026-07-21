@@ -12,10 +12,9 @@ import (
 	appv1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 )
 
-// Tests apply an ArgoCDConfiguration only in fixtures — production installs leave the CR absent.
+// Tests apply an ArgoCDConfiguration only in fixtures — production requires the singleton CR.
 
-func TestResolve_CRDPrecedencesOverStatic(t *testing.T) {
-	trueVal := true
+func TestProvider_CRDRequiredForMappedSettings(t *testing.T) {
 	crdObj := &appv1.ArgoCDConfiguration{
 		Spec: appv1.ArgoCDConfigurationSpec{
 			Controller: &appv1.ControllerConfig{
@@ -27,19 +26,13 @@ func TestResolve_CRDPrecedencesOverStatic(t *testing.T) {
 				SelfHeal: &appv1.SelfHealConfig{
 					Timeout: &metav1.Duration{Duration: 90 * time.Second},
 				},
-				ResourceHealthPersist: &trueVal,
+				ResourceHealthPersist: ptrBool(true),
 			},
 			InstallationID: "from-crd",
 		},
 	}
-	fallback := &StaticProvider{Fields: StaticFields{
-		ReconciliationTimeout:     Ptr(120 * time.Second),
-		HardReconciliationTimeout: Ptr(300 * time.Second),
-		ReconciliationJitter:      Ptr(60 * time.Second),
-		SelfHealTimeout:           Ptr(5 * time.Second),
-		PersistResourceHealth:     Ptr(false),
-	}}
-	p := NewChainProvider(NewCRDProvider(StaticCRDSource{Object: crdObj}), fallback)
+	crd := StaticCRDSource{Object: crdObj}
+	p := NewCRDProvider(crd)
 
 	timeout, err := p.ReconciliationTimeout(context.Background())
 	require.NoError(t, err)
@@ -66,30 +59,17 @@ func TestResolve_CRDPrecedencesOverStatic(t *testing.T) {
 	assert.Equal(t, "from-crd", installID)
 }
 
-func TestResolve_AbsentCRDFallsBackToStatic(t *testing.T) {
-	legacyTO := 120 * time.Second
-	fallback := &StaticProvider{Fields: StaticFields{
-		ReconciliationTimeout:     Ptr(legacyTO),
-		HardReconciliationTimeout: Ptr(300 * time.Second),
-		ReconciliationJitter:      Ptr(60 * time.Second),
-	}}
-	p := NewChainProvider(NewCRDProvider(StaticCRDSource{}), fallback)
+func TestProvider_AbsentCRDErrorsForMappedSettings(t *testing.T) {
+	p := NewCRDProvider(StaticCRDSource{})
 
-	timeout, err := p.ReconciliationTimeout(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, legacyTO, timeout)
+	_, err := p.ReconciliationTimeout(context.Background())
+	require.ErrorIs(t, err, ErrNotConfigured)
 
-	hard, err := p.HardReconciliationTimeout(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, 300*time.Second, hard)
-
-	jitter, err := p.ReconciliationJitter(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, 60*time.Second, jitter)
+	_, err = p.SelfHealTimeout(context.Background())
+	require.ErrorIs(t, err, ErrNotConfigured)
 }
 
-func TestResolve_PartialCRDOnlyOverridesSetFields(t *testing.T) {
-	legacyTO := 120 * time.Second
+func TestProvider_PartialCRDOnlyOverridesSetFields(t *testing.T) {
 	crdObj := &appv1.ArgoCDConfiguration{
 		Spec: appv1.ArgoCDConfigurationSpec{
 			Controller: &appv1.ControllerConfig{
@@ -99,38 +79,14 @@ func TestResolve_PartialCRDOnlyOverridesSetFields(t *testing.T) {
 			},
 		},
 	}
-	fallback := &StaticProvider{Fields: StaticFields{
-		ReconciliationTimeout:     Ptr(legacyTO),
-		HardReconciliationTimeout: Ptr(300 * time.Second),
-		ReconciliationJitter:      Ptr(60 * time.Second),
-	}}
-	p := NewChainProvider(NewCRDProvider(StaticCRDSource{Object: crdObj}), fallback)
+	p := NewCRDProvider(StaticCRDSource{Object: crdObj})
 
 	timeout, err := p.ReconciliationTimeout(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, 30*time.Second, timeout)
 
-	hard, err := p.HardReconciliationTimeout(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, 300*time.Second, hard)
-
-	jitter, err := p.ReconciliationJitter(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, 60*time.Second, jitter)
+	_, err = p.HardReconciliationTimeout(context.Background())
+	require.ErrorIs(t, err, ErrNotConfigured)
 }
 
-func TestChainProvider_ConfigurationAndSubscribeCRD(t *testing.T) {
-	crdObj := &appv1.ArgoCDConfiguration{Spec: appv1.ArgoCDConfigurationSpec{InstallationID: "cfg"}}
-	src := StaticCRDSource{Object: crdObj}
-	chain := NewChainProvider(NewCRDProvider(src), &StaticProvider{})
-
-	cfg, err := chain.Configuration(context.Background())
-	require.NoError(t, err)
-	require.NotNil(t, cfg)
-	assert.Equal(t, "cfg", cfg.Spec.InstallationID)
-
-	// no-op subscribe on StaticCRDSource (not a notifier) must not panic
-	ch := make(chan struct{}, 1)
-	chain.SubscribeCRD(ch)
-	chain.UnsubscribeCRD(ch)
-}
+func ptrBool(b bool) *bool { return &b }

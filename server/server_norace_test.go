@@ -16,7 +16,7 @@ import (
 
 	"github.com/argoproj/argo-cd/v3/common"
 	"github.com/argoproj/argo-cd/v3/pkg/apiclient"
-	applicationpkg "github.com/argoproj/argo-cd/v3/pkg/apiclient/application"
+	applicationpkg 	"github.com/argoproj/argo-cd/v3/pkg/apiclient/application"
 	"github.com/argoproj/argo-cd/v3/test"
 	"github.com/argoproj/argo-cd/v3/util/configbus"
 )
@@ -124,9 +124,19 @@ func Test_StaticHeaders(t *testing.T) {
 	{
 		s, closer := fakeServer(t)
 		defer closer()
-		s.XFrameOptions = "deny"
-		s.ContentSecurityPolicy = "frame-ancestors 'none';"
-		s.rebuildConfigProviderFromFields()
+		xfo := "deny"
+		csp := "frame-ancestors 'none';"
+		metricsPort, err := test.GetFreePort()
+		require.NoError(t, err)
+		s.configProvider = configbus.NewCRDProvider(configbus.TestServerCRDSourceFor(configbus.TestServerCRDOptions{
+			ListenPort:            s.ListenPort,
+			MetricsPort:           metricsPort,
+			Insecure:              s.Insecure,
+			DisableAuth:           s.DisableAuth,
+			StaticAssetsPath:      s.StaticAssetsDir,
+			XFrameOptions:         &xfo,
+			ContentSecurityPolicy: &csp,
+		}))
 		cancelInformer := test.StartInformer(s.projInformer)
 		defer cancelInformer()
 		lns, err := s.Listen()
@@ -154,9 +164,18 @@ func Test_StaticHeaders(t *testing.T) {
 	{
 		s, closer := fakeServer(t)
 		defer closer()
-		s.XFrameOptions = ""
-		s.ContentSecurityPolicy = ""
-		s.rebuildConfigProviderFromFields()
+		empty := ""
+		metricsPort, err := test.GetFreePort()
+		require.NoError(t, err)
+		s.configProvider = configbus.NewCRDProvider(configbus.TestServerCRDSourceFor(configbus.TestServerCRDOptions{
+			ListenPort:            s.ListenPort,
+			MetricsPort:           metricsPort,
+			Insecure:              s.Insecure,
+			DisableAuth:           s.DisableAuth,
+			StaticAssetsPath:      s.StaticAssetsDir,
+			XFrameOptions:         &empty,
+			ContentSecurityPolicy: &empty,
+		}))
 		cancelInformer := test.StartInformer(s.projInformer)
 		defer cancelInformer()
 		lns, err := s.Listen()

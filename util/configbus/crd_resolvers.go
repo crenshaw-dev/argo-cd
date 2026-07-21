@@ -7,6 +7,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	enginecache "github.com/argoproj/argo-cd/gitops-engine/v3/pkg/cache"
 	appv1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
@@ -349,7 +350,8 @@ func crdMTLSCertKey(m *appv1.MTLSCertConfig) (string, bool) {
 
 func crdAllowedNodeLabels(cfg *appv1.ArgoCDConfiguration) ([]string, bool) {
 	if cfg.Spec.Controller != nil {
-		return crdStrSlice(cfg.Spec.Controller.AllowedNodeLabelKeys)
+		// Empty list is a valid CR value (no allowed node labels).
+		return cfg.Spec.Controller.AllowedNodeLabelKeys, true
 	}
 	return nil, false
 }
@@ -371,7 +373,7 @@ func crdApplicationNamespaces(cfg *appv1.ArgoCDConfiguration) ([]string, bool) {
 
 func crdApplicationsetAllowedScmProviders(cfg *appv1.ArgoCDConfiguration) ([]string, bool) {
 	if cfg.Spec.ApplicationSet != nil {
-		return crdStrSlice(cfg.Spec.ApplicationSet.AllowedSCMProviderURLs)
+		return append([]string(nil), cfg.Spec.ApplicationSet.AllowedSCMProviderURLs...), true
 	}
 	return nil, false
 }
@@ -462,7 +464,8 @@ func crdApplicationsetRequeueAfter(cfg *appv1.ArgoCDConfiguration) (time.Duratio
 
 func crdApplicationsetScmRootCaPath(cfg *appv1.ArgoCDConfiguration) (string, bool) {
 	if cfg.Spec.ApplicationSet != nil {
-		return crdStr(cfg.Spec.ApplicationSet.SCMRootCAPath)
+		// Empty SCM root CA path is valid (use system CAs).
+		return cfg.Spec.ApplicationSet.SCMRootCAPath, true
 	}
 	return "", false
 }
@@ -482,17 +485,17 @@ func crdApplicationsetWebhookAddr(cfg *appv1.ArgoCDConfiguration) (string, bool)
 }
 
 func crdCommitAuthorEmail(cfg *appv1.ArgoCDConfiguration) (string, bool) {
-	if cfg.Spec.CommitServer != nil && cfg.Spec.CommitServer.Commit != nil && cfg.Spec.CommitServer.Commit.Author != nil {
-		return crdStr(cfg.Spec.CommitServer.Commit.Author.Email)
+	if cfg.Spec.CommitServer == nil || cfg.Spec.CommitServer.Commit == nil || cfg.Spec.CommitServer.Commit.Author == nil {
+		return "", true
 	}
-	return "", false
+	return cfg.Spec.CommitServer.Commit.Author.Email, true
 }
 
 func crdCommitAuthorName(cfg *appv1.ArgoCDConfiguration) (string, bool) {
-	if cfg.Spec.CommitServer != nil && cfg.Spec.CommitServer.Commit != nil && cfg.Spec.CommitServer.Commit.Author != nil {
-		return crdStr(cfg.Spec.CommitServer.Commit.Author.Name)
+	if cfg.Spec.CommitServer == nil || cfg.Spec.CommitServer.Commit == nil || cfg.Spec.CommitServer.Commit.Author == nil {
+		return "", true
 	}
-	return "", false
+	return cfg.Spec.CommitServer.Commit.Author.Name, true
 }
 
 func crdCommitserverGrpcEnableTxtServiceConfig(cfg *appv1.ArgoCDConfiguration) (bool, bool) {
@@ -587,18 +590,24 @@ func crdControllerStatusProcessors(cfg *appv1.ArgoCDConfiguration) (int, bool) {
 }
 
 func crdControllerSyncTimeoutSeconds(cfg *appv1.ArgoCDConfiguration) (time.Duration, bool) {
-	if cfg.Spec.Controller != nil && cfg.Spec.Controller.Sync != nil {
-		return crdDur(cfg.Spec.Controller.Sync.Timeout)
+	if cfg.Spec.Controller == nil || cfg.Spec.Controller.Sync == nil {
+		return 0, false
 	}
-	return 0, false
+	if cfg.Spec.Controller.Sync.Timeout == nil {
+		return 0, true
+	}
+	return cfg.Spec.Controller.Sync.Timeout.Duration, true
 }
 
 func crdHelmSettings(cfg *appv1.ArgoCDConfiguration) (*appv1.HelmOptions, bool, error) {
-	if cfg.Spec.RepoServer != nil {
-		v, ok := crdHelmOptions(cfg.Spec.RepoServer.Helm)
-		return v, ok, nil
+	if cfg.Spec.RepoServer == nil || cfg.Spec.RepoServer.Helm == nil {
+		return &appv1.HelmOptions{}, true, nil
 	}
-	return nil, false, nil
+	v, ok := crdHelmOptions(cfg.Spec.RepoServer.Helm)
+	if !ok {
+		return &appv1.HelmOptions{}, true, nil
+	}
+	return v, true, nil
 }
 
 func crdHydratorEnabled(cfg *appv1.ArgoCDConfiguration) (bool, bool) {
@@ -609,10 +618,13 @@ func crdHydratorEnabled(cfg *appv1.ArgoCDConfiguration) (bool, bool) {
 }
 
 func crdIgnoreResourceUpdatesEnabled(cfg *appv1.ArgoCDConfiguration) (bool, bool) {
-	if cfg.Spec.Controller != nil && cfg.Spec.Controller.Diff != nil {
-		return crdBool(cfg.Spec.Controller.Diff.IgnoreResourceUpdatesEnabled)
+	if cfg.Spec.Controller == nil {
+		return false, false
 	}
-	return false, false
+	if cfg.Spec.Controller.Diff == nil || cfg.Spec.Controller.Diff.IgnoreResourceUpdatesEnabled == nil {
+		return false, true
+	}
+	return *cfg.Spec.Controller.Diff.IgnoreResourceUpdatesEnabled, true
 }
 
 func crdCfgImpersonationEnabled(cfg *appv1.ArgoCDConfiguration) (bool, bool) {
@@ -630,36 +642,41 @@ func crdCfgImpersonationEnforced(cfg *appv1.ArgoCDConfiguration) (bool, bool) {
 }
 
 func crdInstallationID(cfg *appv1.ArgoCDConfiguration) (string, bool) {
-	return crdStr(cfg.Spec.InstallationID)
+	// Empty installation ID is valid (disables multi-install tracking filters).
+	return cfg.Spec.InstallationID, true
 }
 
 func crdKustomizeBuildOptions(cfg *appv1.ArgoCDConfiguration) (*appv1.KustomizeOptions, bool, error) {
-	if cfg.Spec.RepoServer != nil {
-		v, ok := crdKustomizeOptions(cfg.Spec.RepoServer.Kustomize)
-		return v, ok, nil
+	if cfg.Spec.RepoServer == nil || cfg.Spec.RepoServer.Kustomize == nil {
+		return &appv1.KustomizeOptions{}, true, nil
 	}
-	return nil, false, nil
+	v, ok := crdKustomizeOptions(cfg.Spec.RepoServer.Kustomize)
+	if !ok {
+		return &appv1.KustomizeOptions{}, true, nil
+	}
+	return v, true, nil
 }
 
 func crdNotificationsAppLabelSelector(cfg *appv1.ArgoCDConfiguration) (string, bool) {
-	if cfg.Spec.Notifications != nil {
-		return crdStr(cfg.Spec.Notifications.AppLabelSelector)
+	if cfg.Spec.Notifications == nil {
+		return "", false
 	}
-	return "", false
+	// Empty selector is valid (match all); Notifications presence marks the field configured.
+	return cfg.Spec.Notifications.AppLabelSelector, true
 }
 
 func crdNotificationsConfigMapName(cfg *appv1.ArgoCDConfiguration) (string, bool) {
-	if cfg.Spec.Notifications != nil {
-		return crdStr(cfg.Spec.Notifications.ConfigMapName)
+	if cfg.Spec.Notifications == nil {
+		return "", false
 	}
-	return "", false
+	return cfg.Spec.Notifications.ConfigMapName, true
 }
 
 func crdNotificationsSecretName(cfg *appv1.ArgoCDConfiguration) (string, bool) {
-	if cfg.Spec.Notifications != nil {
-		return crdStr(cfg.Spec.Notifications.SecretName)
+	if cfg.Spec.Notifications == nil {
+		return "", false
 	}
-	return "", false
+	return cfg.Spec.Notifications.SecretName, true
 }
 
 func crdNotificationsSelfserviceEnabled(cfg *appv1.ArgoCDConfiguration) (bool, bool) {
@@ -789,11 +806,17 @@ func crdReposerverStreamedManifestMaxTarSize(cfg *appv1.ArgoCDConfiguration) (in
 }
 
 func crdResourceCompareOptions(cfg *appv1.ArgoCDConfiguration) (settings.ArgoCDDiffOptions, bool, error) {
-	if cfg.Spec.Controller != nil && cfg.Spec.Controller.Diff != nil {
-		v, ok := crdCompareOptions(cfg.Spec.Controller.Diff.CompareOptions)
-		return v, ok, nil
+	if cfg.Spec.Controller == nil {
+		return settings.ArgoCDDiffOptions{}, false, nil
 	}
-	return settings.ArgoCDDiffOptions{}, false, nil
+	if cfg.Spec.Controller.Diff == nil || cfg.Spec.Controller.Diff.CompareOptions == nil {
+		return settings.ArgoCDDiffOptions{}, true, nil
+	}
+	v, ok := crdCompareOptions(cfg.Spec.Controller.Diff.CompareOptions)
+	if !ok {
+		return settings.ArgoCDDiffOptions{}, true, nil
+	}
+	return v, true, nil
 }
 
 func crdResourceTrackingMethod(cfg *appv1.ArgoCDConfiguration) (string, bool) {
@@ -808,22 +831,25 @@ func crdCfgResourcesFilter(cfg *appv1.ArgoCDConfiguration) (*settings.ResourcesF
 }
 
 func crdCfgRespectRBAC(cfg *appv1.ArgoCDConfiguration) (int, bool) {
-	if cfg.Spec.Controller != nil && cfg.Spec.Controller.Resource != nil {
-		return crdRespectRBAC(cfg.Spec.Controller.Resource.RespectRBAC)
+	if cfg.Spec.Controller == nil {
+		return 0, false
 	}
-	return 0, false
+	if cfg.Spec.Controller.Resource == nil {
+		return crdRespectRBAC("")
+	}
+	return crdRespectRBAC(cfg.Spec.Controller.Resource.RespectRBAC)
 }
 
 func crdServerBasehref(cfg *appv1.ArgoCDConfiguration) (string, bool) {
 	if cfg.Spec.Server != nil {
-		return crdStr(cfg.Spec.Server.BaseHref)
+		return cfg.Spec.Server.BaseHref, true
 	}
 	return "", false
 }
 
 func crdServerContentSecurityPolicy(cfg *appv1.ArgoCDConfiguration) (string, bool) {
 	if cfg.Spec.Server != nil {
-		return crdStr(cfg.Spec.Server.ContentSecurityPolicy)
+		return cfg.Spec.Server.ContentSecurityPolicy, true
 	}
 	return "", false
 }
@@ -852,6 +878,34 @@ func crdServerDexServerStrictTls(cfg *appv1.ArgoCDConfiguration) (bool, bool) {
 func crdServerDisableAuth(cfg *appv1.ArgoCDConfiguration) (bool, bool) {
 	if cfg.Spec.Server != nil {
 		return crdBoolNot(cfg.Spec.Server.AuthEnabled)
+	}
+	return false, false
+}
+
+func crdAnonymousUserEnabled(cfg *appv1.ArgoCDConfiguration) (bool, bool) {
+	if cfg.Spec.Server != nil && cfg.Spec.Server.Users != nil {
+		return crdBool(cfg.Spec.Server.Users.AnonymousEnabled)
+	}
+	return false, false
+}
+
+func crdExecEnabled(cfg *appv1.ArgoCDConfiguration) (bool, bool) {
+	if cfg.Spec.Server != nil && cfg.Spec.Server.Exec != nil {
+		return cfg.Spec.Server.Exec.Enabled, true
+	}
+	return false, false
+}
+
+func crdExecShells(cfg *appv1.ArgoCDConfiguration) ([]string, bool) {
+	if cfg.Spec.Server != nil && cfg.Spec.Server.Exec != nil && cfg.Spec.Server.Exec.Shells != nil {
+		return append([]string(nil), cfg.Spec.Server.Exec.Shells...), true
+	}
+	return nil, false
+}
+
+func crdStatusBadgeEnabled(cfg *appv1.ArgoCDConfiguration) (bool, bool) {
+	if cfg.Spec.Server != nil && cfg.Spec.Server.StatusBadge != nil {
+		return cfg.Spec.Server.StatusBadge.Enabled, true
 	}
 	return false, false
 }
@@ -907,14 +961,14 @@ func crdServerMetricsPort(cfg *appv1.ArgoCDConfiguration) (int, bool) {
 
 func crdServerRootpath(cfg *appv1.ArgoCDConfiguration) (string, bool) {
 	if cfg.Spec.Server != nil {
-		return crdStr(cfg.Spec.Server.RootPath)
+		return cfg.Spec.Server.RootPath, true
 	}
 	return "", false
 }
 
 func crdServerStaticassets(cfg *appv1.ArgoCDConfiguration) (string, bool) {
 	if cfg.Spec.Server != nil {
-		return crdStr(cfg.Spec.Server.StaticAssetsPath)
+		return cfg.Spec.Server.StaticAssetsPath, true
 	}
 	return "", false
 }
@@ -942,28 +996,35 @@ func crdServerWebhookRefreshWorkers(cfg *appv1.ArgoCDConfiguration) (int, bool) 
 
 func crdServerXFrameOptions(cfg *appv1.ArgoCDConfiguration) (string, bool) {
 	if cfg.Spec.Server != nil {
-		return crdStr(cfg.Spec.Server.XFrameOptions)
+		return cfg.Spec.Server.XFrameOptions, true
 	}
 	return "", false
 }
 
 func crdSourceHydratorCommitMessageTemplate(cfg *appv1.ArgoCDConfiguration) (string, bool) {
-	if cfg.Spec.Controller != nil && cfg.Spec.Controller.SourceHydrator != nil {
-		return crdStr(cfg.Spec.Controller.SourceHydrator.CommitMessageTemplate)
+	if cfg.Spec.Controller == nil {
+		return "", false
 	}
-	return "", false
+	if cfg.Spec.Controller.SourceHydrator == nil {
+		return "", true
+	}
+	// Empty template is valid; callers fall back to the built-in default.
+	return cfg.Spec.Controller.SourceHydrator.CommitMessageTemplate, true
 }
 
 func crdSourceHydratorReadmeMessageTemplate(cfg *appv1.ArgoCDConfiguration) (string, bool) {
-	if cfg.Spec.Controller != nil && cfg.Spec.Controller.SourceHydrator != nil {
-		return crdStr(cfg.Spec.Controller.SourceHydrator.ReadmeMessageTemplate)
+	if cfg.Spec.Controller == nil {
+		return "", false
 	}
-	return "", false
+	if cfg.Spec.Controller.SourceHydrator == nil {
+		return "", true
+	}
+	return cfg.Spec.Controller.SourceHydrator.ReadmeMessageTemplate, true
 }
 
 func crdControllerMetricsClusterLabels(cfg *appv1.ArgoCDConfiguration) ([]string, bool) {
 	if cfg.Spec.Controller != nil && cfg.Spec.Controller.Metrics != nil && cfg.Spec.Controller.Metrics.Cluster != nil {
-		return crdStrSlice(cfg.Spec.Controller.Metrics.Cluster.LabelKeys)
+		return cfg.Spec.Controller.Metrics.Cluster.LabelKeys, true
 	}
 	return nil, false
 }
@@ -990,8 +1051,12 @@ func crdReconciliationJitter(cfg *appv1.ArgoCDConfiguration) (time.Duration, boo
 }
 
 func crdResourceOverrides(cfg *appv1.ArgoCDConfiguration) (map[string]appv1.ResourceOverride, bool, error) {
-	if cfg.Spec.Controller == nil || cfg.Spec.Controller.Resource == nil {
+	if cfg.Spec.Controller == nil {
 		return nil, false, nil
+	}
+	// Absent or empty Resource subgroup means no customizations (empty map).
+	if cfg.Spec.Controller.Resource == nil {
+		return map[string]appv1.ResourceOverride{}, true, nil
 	}
 	r := cfg.Spec.Controller.Resource
 	if len(r.Health) == 0 &&
@@ -999,11 +1064,141 @@ func crdResourceOverrides(cfg *appv1.ArgoCDConfiguration) (map[string]appv1.Reso
 		len(r.IgnoreDifferences) == 0 &&
 		len(r.IgnoreResourceUpdates) == 0 &&
 		len(r.KnownTypeFields) == 0 {
-		return nil, false, nil
+		return map[string]appv1.ResourceOverride{}, true, nil
 	}
 	out, err := mergeResourceOverrides(r)
 	if err != nil {
 		return nil, false, err
 	}
 	return out, true, nil
+}
+
+func crdApplicationsetNamespaces(cfg *appv1.ArgoCDConfiguration) ([]string, bool) {
+	if cfg.Spec.ApplicationSet != nil {
+		return crdStrSlice(cfg.Spec.ApplicationSet.NamespaceGlobs)
+	}
+	return nil, false
+}
+
+func crdApplicationsetGlobalPreservedAnnotations(cfg *appv1.ArgoCDConfiguration) ([]string, bool) {
+	if cfg.Spec.ApplicationSet == nil {
+		return nil, false
+	}
+	if cfg.Spec.ApplicationSet.GlobalPreserved == nil {
+		// Empty preserved keys is valid when ApplicationSet is configured.
+		return nil, true
+	}
+	return cfg.Spec.ApplicationSet.GlobalPreserved.AnnotationKeys, true
+}
+
+func crdApplicationsetGlobalPreservedLabels(cfg *appv1.ArgoCDConfiguration) ([]string, bool) {
+	if cfg.Spec.ApplicationSet == nil {
+		return nil, false
+	}
+	if cfg.Spec.ApplicationSet.GlobalPreserved == nil {
+		return nil, true
+	}
+	return cfg.Spec.ApplicationSet.GlobalPreserved.LabelKeys, true
+}
+
+func crdSensitiveAnnotations(cfg *appv1.ArgoCDConfiguration) (map[string]bool, bool) {
+	if cfg.Spec.Controller == nil {
+		return nil, false
+	}
+	out := map[string]bool{}
+	if cfg.Spec.Controller.Resource != nil {
+		for _, k := range cfg.Spec.Controller.Resource.SensitiveMaskAnnotationKeys {
+			if k == "" {
+				continue
+			}
+			out[k] = true
+		}
+	}
+	return out, true
+}
+
+func crdResourceCustomLabels(cfg *appv1.ArgoCDConfiguration) ([]string, bool) {
+	if cfg.Spec.Controller == nil {
+		return nil, false
+	}
+	if cfg.Spec.Controller.Resource == nil {
+		return []string{}, true
+	}
+	return append([]string(nil), cfg.Spec.Controller.Resource.CustomLabelKeys...), true
+}
+
+func crdEnabledSourceTypes(cfg *appv1.ArgoCDConfiguration) (map[string]bool, bool) {
+	// Defaults match argocd-cm: unset enable keys mean enabled. Plugin cannot be disabled.
+	res := map[string]bool{
+		string(appv1.ApplicationSourceTypeKustomize): true,
+		string(appv1.ApplicationSourceTypeHelm):      true,
+		string(appv1.ApplicationSourceTypeDirectory): true,
+		string(appv1.ApplicationSourceTypePlugin):    true,
+	}
+	if cfg.Spec.RepoServer == nil {
+		return res, true
+	}
+	if cfg.Spec.RepoServer.Kustomize != nil && cfg.Spec.RepoServer.Kustomize.Enabled != nil {
+		res[string(appv1.ApplicationSourceTypeKustomize)] = *cfg.Spec.RepoServer.Kustomize.Enabled
+	}
+	if cfg.Spec.RepoServer.Helm != nil && cfg.Spec.RepoServer.Helm.Enabled != nil {
+		res[string(appv1.ApplicationSourceTypeHelm)] = *cfg.Spec.RepoServer.Helm.Enabled
+	}
+	if cfg.Spec.RepoServer.Jsonnet != nil && cfg.Spec.RepoServer.Jsonnet.Enabled != nil {
+		res[string(appv1.ApplicationSourceTypeDirectory)] = *cfg.Spec.RepoServer.Jsonnet.Enabled
+	}
+	return res, true
+}
+
+func crdServerContentTypes(cfg *appv1.ArgoCDConfiguration) ([]string, bool) {
+	if cfg.Spec.Server == nil {
+		return nil, false
+	}
+	return append([]string(nil), cfg.Spec.Server.APIContentTypes...), true
+}
+
+func crdSelfHealBackoff(cfg *appv1.ArgoCDConfiguration) (*wait.Backoff, bool) {
+	if cfg.Spec.Controller == nil {
+		return nil, false
+	}
+	if cfg.Spec.Controller.SelfHeal == nil || cfg.Spec.Controller.SelfHeal.Backoff == nil {
+		// Absent backoff subgroup means no exponential self-heal backoff.
+		return nil, true
+	}
+	b := cfg.Spec.Controller.SelfHeal.Backoff
+	out := &wait.Backoff{
+		Duration: 2 * time.Second,
+		Factor:   3,
+		Cap:      300 * time.Second,
+	}
+	if b.Duration != nil {
+		out.Duration = b.Duration.Duration
+	}
+	if b.Factor != nil {
+		out.Factor = float64(*b.Factor)
+	}
+	if b.MaxDuration != nil {
+		out.Cap = b.MaxDuration.Duration
+	}
+	return out, true
+}
+
+func crdReposerverOCIMediaTypes(cfg *appv1.ArgoCDConfiguration) ([]string, bool) {
+	if cfg.Spec.RepoServer == nil {
+		return nil, false
+	}
+	if cfg.Spec.RepoServer.OCI == nil {
+		return []string{}, true
+	}
+	return append([]string(nil), cfg.Spec.RepoServer.OCI.LayerMediaTypes...), true
+}
+
+func crdReposerverCMPTarExcludedGlobs(cfg *appv1.ArgoCDConfiguration) ([]string, bool) {
+	if cfg.Spec.RepoServer == nil {
+		return nil, false
+	}
+	if cfg.Spec.RepoServer.Plugin == nil {
+		return []string{}, true
+	}
+	return append([]string(nil), cfg.Spec.RepoServer.Plugin.TarExclusionGlobs...), true
 }

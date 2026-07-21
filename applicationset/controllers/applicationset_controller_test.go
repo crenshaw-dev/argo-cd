@@ -5301,6 +5301,9 @@ func TestReconcileAddsFinalizer_WhenDeletionOrderReverse(t *testing.T) {
 				Build()
 			metrics := appsetmetrics.NewFakeAppsetMetrics()
 			argodb := db.NewDB("argocd", settings.NewSettingsManager(t.Context(), kubeclientset, "argocd"), kubeclientset)
+			clusterInformer, err := settings.NewClusterInformer(kubeclientset, "argocd")
+			require.NoError(t, err)
+			defer startAndSyncInformer(t, clusterInformer)()
 
 			r := ApplicationSetReconciler{
 				Client:                 client,
@@ -5312,6 +5315,7 @@ func TestReconcileAddsFinalizer_WhenDeletionOrderReverse(t *testing.T) {
 				KubeClientset:          kubeclientset,
 				Metrics:                metrics,
 				EnableProgressiveSyncs: cc.progressiveSyncEnabled,
+				ClusterInformer:        clusterInformer,
 			}
 			r.ProgressiveSyncManager = progressivesync.NewManager(r.Client, &r)
 
@@ -5382,6 +5386,9 @@ func TestReconcileProgressiveSyncDisabled(t *testing.T) {
 			metrics := appsetmetrics.NewFakeAppsetMetrics()
 
 			argodb := db.NewDB("argocd", settings.NewSettingsManager(t.Context(), kubeclientset, "argocd"), kubeclientset)
+			clusterInformer, err := settings.NewClusterInformer(kubeclientset, "argocd")
+			require.NoError(t, err)
+			defer startAndSyncInformer(t, clusterInformer)()
 
 			r := ApplicationSetReconciler{
 				Client:                 client,
@@ -5393,6 +5400,7 @@ func TestReconcileProgressiveSyncDisabled(t *testing.T) {
 				KubeClientset:          kubeclientset,
 				Metrics:                metrics,
 				EnableProgressiveSyncs: cc.enableProgressiveSyncs,
+				ClusterInformer:        clusterInformer,
 			}
 
 			req := ctrl.Request{

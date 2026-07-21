@@ -32,6 +32,7 @@ import (
 	"github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/argoproj/argo-cd/v3/reposerver/apiclient"
 	"github.com/argoproj/argo-cd/v3/test"
+	"github.com/argoproj/argo-cd/v3/util/configbus"
 )
 
 // TestCompareAppStateEmpty tests comparison when both git and live have no objects
@@ -989,10 +990,10 @@ func TestReturnUnknownComparisonStateOnSettingLoadError(t *testing.T) {
 
 	ctrl := newFakeController(t.Context(), &fakeData{
 		apps: []runtime.Object{app, proj},
-		configMapData: map[string]string{
-			"resource.customizations": "invalid setting",
-		},
 	}, nil)
+	// Under CRD-only resolution, comparison settings come from ArgoCDConfiguration.
+	// An absent CR must short-circuit to Unknown without loading repo objects.
+	ctrl.appStateManager.(*appStateManager).configProvider = configbus.NewCRDProvider(configbus.StaticCRDSource{})
 
 	sources := make([]v1alpha1.ApplicationSource, 0)
 	sources = append(sources, app.Spec.GetSource())

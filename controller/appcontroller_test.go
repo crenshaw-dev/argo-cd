@@ -20,7 +20,6 @@ import (
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 
 	"github.com/argoproj/argo-cd/v3/common"
@@ -230,10 +229,24 @@ func newFakeControllerWithResync(ctx context.Context, data *fakeData, appResyncP
 	if data.persistResourceHealth != nil {
 		persistResourceHealth = *data.persistResourceHealth
 	}
+	hardResync := time.Hour
+	resyncJitter := time.Second
+	selfHealTimeout := time.Minute
+	syncTimeout := time.Duration(0)
+	repoErrorGrace := 10 * time.Second
+	crdSrc := configbus.TestControllerCRDSourceFor(configbus.TestControllerCRDOptions{
+		ReconciliationTimeout: appResyncPeriod,
+		HardTimeout:           hardResync,
+		Jitter:                resyncJitter,
+		SelfHealTimeout:       selfHealTimeout,
+		SyncTimeout:           syncTimeout,
+		RepoErrorGracePeriod:  repoErrorGrace,
+		PersistResourceHealth: &persistResourceHealth,
+	})
 	ctrl, err := NewApplicationController(
 		test.FakeArgoCDNamespace,
 		settingsMgr,
-		nil,
+		crdSrc,
 		kubeClient,
 		appclientset.NewSimpleClientset(data.apps...),
 		mockRepoClientset,
@@ -244,12 +257,12 @@ func newFakeControllerWithResync(ctx context.Context, data *fakeData, appResyncP
 		),
 		kubectl,
 		appResyncPeriod,
-		time.Hour,
-		time.Second,
-		time.Minute,
+		hardResync,
+		resyncJitter,
+		selfHealTimeout,
 		nil,
-		0,
-		time.Second*10,
+		syncTimeout,
+		repoErrorGrace,
 		common.DefaultPortArgoCDMetrics,
 		data.metricsCacheExpiration,
 		[]string{},
@@ -1332,6 +1345,10 @@ func TestFinalizeAppDeletion(t *testing.T) {
 				"application.resourceTrackingMethod": "annotation+label",
 			},
 		}, nil)
+		if cfg, err := ctrl.configProvider.Configuration(context.Background()); cfg != nil && cfg.Spec.Controller != nil {
+		require.NoError(t, err)
+			cfg.Spec.Controller.ResourceTrackingMethod = "annotation+label"
+		}
 
 		fakeAppCs := ctrl.applicationClientset.(*appclientset.Clientset)
 		defaultReactor := fakeAppCs.ReactionChain[0]
@@ -1412,6 +1429,10 @@ func TestFinalizeAppDeletion(t *testing.T) {
 				"application.resourceTrackingMethod": "annotation+label",
 			},
 		}, nil)
+		if cfg, err := ctrl.configProvider.Configuration(context.Background()); cfg != nil && cfg.Spec.Controller != nil {
+		require.NoError(t, err)
+			cfg.Spec.Controller.ResourceTrackingMethod = "annotation+label"
+		}
 
 		patched := false
 		fakeAppCs := ctrl.applicationClientset.(*appclientset.Clientset)
@@ -1699,6 +1720,13 @@ func TestFinalizeAppDeletionWithImpersonation(t *testing.T) {
 			additionalObjs: additionalObjs,
 		}
 		ctrl := newFakeController(t.Context(), &data, nil)
+		if cfg, err := ctrl.configProvider.Configuration(context.Background()); cfg != nil && cfg.Spec.Controller != nil {
+		require.NoError(t, err)
+			if cfg.Spec.Controller.Sync == nil {
+				cfg.Spec.Controller.Sync = &v1alpha1.ApplicationSyncConfig{}
+			}
+			cfg.Spec.Controller.Sync.Impersonation = &v1alpha1.SyncImpersonationConfig{Mode: "required"}
+		}
 		return &fixture{
 			application: app,
 			controller:  ctrl,
@@ -2324,6 +2352,42 @@ func TestUpdateReconciledAt(t *testing.T) {
 	})
 }
 
+func setCRDDeploymentHealthLua(ctrl *ApplicationController, healthLua string) {
+	cfg, err := ctrl.configProvider.Configuration(context.Background())
+	require.NoError(t, err)
+	if cfg == nil || cfg.Spec.Controller == nil {
+		return
+	}
+	if cfg.Spec.Controller.Resource == nil {
+		cfg.Spec.Controller.Resource = &v1alpha1.ResourceConfig{}
+	}
+	cfg.Spec.Controller.Resource.Health = []v1alpha1.ResourceHealthCustomization{{
+		Group: "apps", Kind: "Deployment", HealthLua: healthLua,
+	}}
+}
+
+func healthLuaFromResourceCustomizations(cmData map[string]string) string {
+	raw := cmData["resource.customizations"]
+	const marker = "health.lua: |"
+	_, after, ok := strings.Cut(raw, marker)
+	if !ok {
+		return ""
+	}
+	var b strings.Builder
+	for line := range strings.SplitSeq(after, "\n") {
+		if strings.TrimSpace(line) == "" && b.Len() == 0 {
+			continue
+		}
+		// YAML block scalar body is indented; stop at a less-indented key.
+		if line != "" && line[0] != ' ' && line[0] != '\t' && b.Len() > 0 {
+			break
+		}
+		b.WriteString(strings.TrimPrefix(line, "    "))
+		b.WriteByte('\n')
+	}
+	return strings.TrimSpace(b.String())
+}
+
 func TestUpdateHealthStatus(t *testing.T) {
 	deployment := kube.MustToUnstructured(&appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
@@ -2465,6 +2529,10 @@ apps/Deployment:
 				configMapData:         tc.configMapData,
 				persistResourceHealth: &tc.persistResourceHealth,
 			}, nil)
+			// CRD-only: health.lua customizations must live on the CR, not argocd-cm.
+			if lua := healthLuaFromResourceCustomizations(tc.configMapData); lua != "" {
+				setCRDDeploymentHealthLua(ctrl, lua)
+			}
 
 			ctrl.processAppRefreshQueueItem()
 			apps, err := ctrl.appLister.List(labels.Everything())
@@ -2545,6 +2613,9 @@ apps/Deployment:
 			{},
 		},
 	}, time.Millisecond*10, nil, nil)
+	if lua := healthLuaFromResourceCustomizations(configMapData); lua != "" {
+		setCRDDeploymentHealthLua(ctrl, lua)
+	}
 
 	testCases := []struct {
 		name           string
@@ -2654,9 +2725,19 @@ func TestOrphanedIndexDoesNotQueryProjectDuringStartupRace(t *testing.T) {
 			OrphanedResources: &v1alpha1.OrphanedResourcesMonitorSettings{},
 		},
 	}
+	persist := true
+	crdSrc := configbus.TestControllerCRDSourceFor(configbus.TestControllerCRDOptions{
+		ReconciliationTimeout: time.Minute,
+		HardTimeout:           time.Hour,
+		Jitter:                time.Second,
+		SelfHealTimeout:       time.Minute,
+		SyncTimeout:           0,
+		RepoErrorGracePeriod:  10 * time.Second,
+		PersistResourceHealth: &persist,
+	})
 	ctrl, err := NewApplicationController(
 		test.FakeArgoCDNamespace, settingsMgr,
-		nil,
+		crdSrc,
 		kubeClient,
 		appclientset.NewSimpleClientset(app, proj),
 		mockRepoClientset, mockCommitClientset,
@@ -2721,9 +2802,19 @@ func TestOrphanedIndexReturnsNamespaceWhenProjectHasOrphanedResources(t *testing
 			OrphanedResources: &v1alpha1.OrphanedResourcesMonitorSettings{},
 		},
 	}
+	persist := true
+	crdSrc := configbus.TestControllerCRDSourceFor(configbus.TestControllerCRDOptions{
+		ReconciliationTimeout: time.Minute,
+		HardTimeout:           time.Hour,
+		Jitter:                time.Second,
+		SelfHealTimeout:       time.Minute,
+		SyncTimeout:           0,
+		RepoErrorGracePeriod:  10 * time.Second,
+		PersistResourceHealth: &persist,
+	})
 	ctrl, err := NewApplicationController(
 		test.FakeArgoCDNamespace, settingsMgr,
-		nil,
+		crdSrc,
 		kubeClient,
 		appclientset.NewSimpleClientset(app, proj),
 		mockRepoClientset, mockCommitClientset,
@@ -3570,6 +3661,10 @@ func TestGetAppHosts(t *testing.T) {
 		},
 	}
 	ctrl := newFakeController(t.Context(), data, nil)
+	if cfg, err := ctrl.configProvider.Configuration(context.Background()); cfg != nil && cfg.Spec.Controller != nil {
+	require.NoError(t, err)
+		cfg.Spec.Controller.AllowedNodeLabelKeys = []string{"label1", "label2"}
+	}
 	mockStateCache := &mockstatecache.LiveStateCache{}
 	mockStateCache.EXPECT().IterateResources(mock.Anything, mock.MatchedBy(func(callback func(res *clustercache.Resource, info *statecache.ResourceInfo)) bool {
 		// node resource
@@ -4015,17 +4110,16 @@ func assertDurationAround(t *testing.T, expected time.Duration, actual time.Dura
 }
 
 func TestSelfHealRemainingBackoff(t *testing.T) {
-	backoff := &wait.Backoff{
-		Factor:   3,
-		Duration: 2 * time.Second,
-		Cap:      2 * time.Minute,
+	ctrl := newFakeController(t.Context(), &fakeData{}, nil)
+	factor := int32(3)
+	if cfg, err := ctrl.configProvider.Configuration(context.Background()); cfg != nil && cfg.Spec.Controller != nil && cfg.Spec.Controller.SelfHeal != nil {
+		require.NoError(t, err)
+		cfg.Spec.Controller.SelfHeal.Backoff = &v1alpha1.BackoffConfig{
+			Duration:    &metav1.Duration{Duration: 2 * time.Second},
+			Factor:      &factor,
+			MaxDuration: &metav1.Duration{Duration: 2 * time.Minute},
+		}
 	}
-	override := configbusmocks.NewProvider(t)
-	// Unstubbed mock methods panic; return ErrNotConfigured so Chain falls through
-	// to the real provider for getters this test does not override.
-	override.EXPECT().SelfHealTimeout(mock.Anything).Return(time.Duration(0), configbus.ErrNotConfigured)
-	override.EXPECT().SelfHealRetry(mock.Anything).Return(configbus.SelfHealRetry{Backoff: backoff}, nil)
-	ctrl := newFakeController(t.Context(), &fakeData{configProviderOverride: override}, nil)
 	app := &v1alpha1.Application{
 		Status: v1alpha1.ApplicationStatus{
 			OperationState: &v1alpha1.OperationState{

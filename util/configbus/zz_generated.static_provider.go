@@ -69,6 +69,9 @@ type StaticFields struct {
 	CommitserverMetricsPort                       *int
 	ContentSecurityPolicy                         *string
 	ContentTypes                                  *[]string
+	ControllerHydrationProcessors                 *int
+	ControllerOperationProcessors                 *int
+	ControllerStatusProcessors                    *int
 	DexServerAddr                                 *string
 	DexServerPlaintext                            *bool
 	DexServerStrictTLS                            *bool
@@ -121,6 +124,7 @@ type StaticFields struct {
 	MetricsPort                                   *int
 	NotificationsAppLabelSelector                 *string
 	NotificationsConfigMapName                    *string
+	NotificationsProcessorsCount                  *int
 	NotificationsSecretName                       *string
 	NotificationsSelfserviceEnabled               *bool
 	OCIManifestMaxExtractedSize                   *int64
@@ -505,6 +509,27 @@ func (p *StaticProvider) ContentTypes(_ context.Context) ([]string, error) {
 	return *p.Fields.ContentTypes, nil
 }
 
+func (p *StaticProvider) ControllerHydrationProcessors(_ context.Context) (int, error) {
+	if p == nil || p.Fields.ControllerHydrationProcessors == nil {
+		return 0, ErrNotConfigured
+	}
+	return *p.Fields.ControllerHydrationProcessors, nil
+}
+
+func (p *StaticProvider) ControllerOperationProcessors(_ context.Context) (int, error) {
+	if p == nil || p.Fields.ControllerOperationProcessors == nil {
+		return 0, ErrNotConfigured
+	}
+	return *p.Fields.ControllerOperationProcessors, nil
+}
+
+func (p *StaticProvider) ControllerStatusProcessors(_ context.Context) (int, error) {
+	if p == nil || p.Fields.ControllerStatusProcessors == nil {
+		return 0, ErrNotConfigured
+	}
+	return *p.Fields.ControllerStatusProcessors, nil
+}
+
 func (p *StaticProvider) DexServerAddr(_ context.Context) (string, error) {
 	if p == nil || p.Fields.DexServerAddr == nil {
 		return "", ErrNotConfigured
@@ -867,6 +892,13 @@ func (p *StaticProvider) NotificationsConfigMapName(_ context.Context) (string, 
 		return "", ErrNotConfigured
 	}
 	return *p.Fields.NotificationsConfigMapName, nil
+}
+
+func (p *StaticProvider) NotificationsProcessorsCount(_ context.Context) (int, error) {
+	if p == nil || p.Fields.NotificationsProcessorsCount == nil {
+		return 0, ErrNotConfigured
+	}
+	return *p.Fields.NotificationsProcessorsCount, nil
 }
 
 func (p *StaticProvider) NotificationsSecretName(_ context.Context) (string, error) {

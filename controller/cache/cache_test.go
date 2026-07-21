@@ -811,14 +811,20 @@ func TestLoadCacheSettings(t *testing.T) {
 		"installationID":                     "123456789",
 	})
 	jqTimeout := 2 * time.Second
+	cfg := configbus.TestControllerCRDSource().(configbus.StaticCRDSource).Object.DeepCopy()
+	require.NotNil(t, cfg)
+	trueVal := true
+	cfg.Spec.InstallationID = "123456789"
+	cfg.Spec.Controller.InstanceLabelKey = "testLabel"
+	cfg.Spec.Controller.ResourceTrackingMethod = string(appv1.TrackingMethodLabel)
+	if cfg.Spec.Controller.Diff == nil {
+		cfg.Spec.Controller.Diff = &appv1.ControllerDiffConfig{}
+	}
+	cfg.Spec.Controller.Diff.IgnoreResourceUpdatesEnabled = &trueVal
+	cfg.Spec.Controller.Diff.IgnoreNormalizerJQTimeout = &metav1.Duration{Duration: jqTimeout}
 	ch := liveStateCache{
-		namespace: "argocd",
-		configProvider: configbus.NewChainProvider(
-			&configbus.StaticProvider{Fields: configbus.StaticFields{
-				IgnoreNormalizerJQTimeout: configbus.Ptr(jqTimeout),
-			}},
-			configbus.NewSettingsManagerProvider(settingsManager),
-		),
+		namespace:      "argocd",
+		configProvider: configbus.NewCRDProvider(configbus.StaticCRDSource{Object: cfg}),
 	}
 	label, err := ch.configProvider.AppInstanceLabelKey(t.Context())
 	require.NoError(t, err)

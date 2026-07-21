@@ -1004,7 +1004,12 @@ func (r *ApplicationSetReconciler) concurrency() (int, error) {
 	r.ensureConfigProvider()
 	n, err := r.configProvider.ApplicationsetConcurrentApplicationUpdates(context.Background())
 	if err != nil {
-		return 0, fmt.Errorf("failed to resolve applicationset concurrent application updates: %w", err)
+		if errors.Is(err, configbus.ErrNotConfigured) {
+			//nolint:staticcheck // SA1019: ConcurrentApplicationUpdates not yet on ArgoCDConfiguration
+			n = r.ConcurrentApplicationUpdates
+		} else {
+			return 0, fmt.Errorf("failed to resolve applicationset concurrent application updates: %w", err)
+		}
 	}
 	if n <= 0 {
 		return 1, nil

@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
@@ -29,14 +30,20 @@ func (a *ArgoCDService) SetConfigProvider(p configbus.Provider) {
 
 func (a *ArgoCDService) submoduleEnabledResolved() (bool, error) {
 	if a.configProvider != nil {
-		return a.configProvider.ApplicationsetGitSubmoduleEnabled(context.Background())
+		v, err := a.configProvider.ApplicationsetGitSubmoduleEnabled(context.Background())
+		if err == nil || !errors.Is(err, configbus.ErrNotConfigured) {
+			return v, err
+		}
 	}
 	return a.LegacySubmoduleEnabled(), nil
 }
 
 func (a *ArgoCDService) newFileGlobbingEnabledResolved() (bool, error) {
 	if a.configProvider != nil {
-		return a.configProvider.ApplicationsetEnableNewGitFileGlobbing(context.Background())
+		v, err := a.configProvider.ApplicationsetEnableNewGitFileGlobbing(context.Background())
+		if err == nil || !errors.Is(err, configbus.ErrNotConfigured) {
+			return v, err
+		}
 	}
 	return a.LegacyNewFileGlobbingEnabled(), nil
 }
