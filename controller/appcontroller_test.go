@@ -2354,8 +2354,7 @@ func TestUpdateReconciledAt(t *testing.T) {
 
 func setCRDDeploymentHealthLua(ctrl *ApplicationController, healthLua string) {
 	cfg, err := ctrl.configProvider.Configuration(context.Background())
-	require.NoError(t, err)
-	if cfg == nil || cfg.Spec.Controller == nil {
+	if err != nil || cfg == nil || cfg.Spec.Controller == nil {
 		return
 	}
 	if cfg.Spec.Controller.Resource == nil {
