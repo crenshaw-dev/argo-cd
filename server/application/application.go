@@ -2583,18 +2583,13 @@ func (s *Server) logAppEvent(ctx context.Context, a *v1alpha1.Application, reaso
 		user = "Unknown user"
 	}
 	message := fmt.Sprintf("%s %s", user, action)
-<<<<<<< HEAD
 	eventLabels := argo.GetAppEventLabels(ctx, a, applisters.NewAppProjectLister(s.projInformer.GetIndexer()), s.ns, configbus.NewSettingsManagerProvider(s.settingsMgr), s.db)
-	s.auditLogger.LogAppEvent(a, eventInfo, message, user, eventLabels)
-=======
-	eventLabels := argo.GetAppEventLabels(ctx, a, applisters.NewAppProjectLister(s.projInformer.GetIndexer()), s.ns, s.settingsMgr, s.db)
 	auditLogger, err := s.auditLogger(ctx)
 	if err != nil {
 		log.Errorf("failed to resolve audit logger: %v", err)
 		return
 	}
 	auditLogger.LogAppEvent(a, eventInfo, message, user, eventLabels)
->>>>>>> 7c30b0155 (refactor: resolve server config via Provider JIT, not crystallized fields)
 }
 
 func (s *Server) logResourceEvent(ctx context.Context, res *v1alpha1.ResourceNode, reason string, action string) {
