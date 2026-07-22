@@ -116,6 +116,17 @@ func TestProvider_SelfHealRetryFromCRD(t *testing.T) {
 	assert.Equal(t, 5*time.Minute, got.Backoff.Cap)
 }
 
+
+func TestProvider_SelfHealRetryFlatTimeoutFromCRD(t *testing.T) {
+	cfg := testControllerCRD()
+	cfg.Spec.Controller.SelfHeal.Backoff = nil
+	p := NewCRDProvider(StaticCRDSource{Object: cfg})
+
+	got, err := p.SelfHealRetry(context.Background())
+	require.NoError(t, err)
+	assert.Nil(t, got.Backoff)
+}
+
 func TestProvider_IgnoreNormalizerJQTimeoutFromCRD(t *testing.T) {
 	p := NewCRDProvider(TestControllerCRDSource())
 	timeout, err := p.IgnoreNormalizerJQTimeout(context.Background())

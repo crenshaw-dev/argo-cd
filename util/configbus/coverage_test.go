@@ -26,6 +26,7 @@ var controllerResolvedMethods = map[string]struct{}{
 	"ReconciliationJitter":          {},
 	"ReconciliationTimeout":         {},
 	"RepoErrorGracePeriod":          {},
+	"SelfHealRetry":                 {},
 	"SelfHealTimeout":               {},
 	"ServerSideDiff":                {},
 	"SyncTimeout":                   {},
