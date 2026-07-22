@@ -39,6 +39,7 @@ import (
 	servercache "github.com/argoproj/argo-cd/v3/server/cache"
 	"github.com/argoproj/argo-cd/v3/util/app/path"
 	"github.com/argoproj/argo-cd/v3/util/argo"
+	"github.com/argoproj/argo-cd/v3/util/configbus"
 	"github.com/argoproj/argo-cd/v3/util/db"
 	"github.com/argoproj/argo-cd/v3/util/git"
 	"github.com/argoproj/argo-cd/v3/util/glob"
@@ -93,7 +94,7 @@ type ArgoCDWebhookHandler struct {
 	serverCache                   *servercache.Cache
 	db                            db.ArgoDB
 	ns                            string
-	appNs                         []string
+	configProvider                configbus.Provider
 	appClientset                  appclientset.Interface
 	appsLister                    alpha1.ApplicationLister
 	parsers                       []Extractor
@@ -106,7 +107,16 @@ type ArgoCDWebhookHandler struct {
 	webhookRefreshJitterThreshold int
 }
 
-func NewHandler(namespace string, applicationNamespaces []string, webhookParallelism int, webhookRefreshWorkers int, appClientset appclientset.Interface, appsLister alpha1.ApplicationLister, set *settings.ArgoCDSettings, settingsSrc settingsSource, repoCache *cache.Cache, serverCache *servercache.Cache, argoDB db.ArgoDB, maxWebhookPayloadSizeB int64, webhookRefreshJitter time.Duration, webhookRefreshJitterThreshold int) *ArgoCDWebhookHandler {
+func NewHandler(namespace string, configProvider configbus.Provider, appClientset appclientset.Interface, appsLister alpha1.ApplicationLister, set *settings.ArgoCDSettings, settingsSrc settingsSource, repoCache *cache.Cache, serverCache *servercache.Cache, argoDB db.ArgoDB, maxWebhookPayloadSizeB int64, webhookRefreshJitter time.Duration, webhookRefreshJitterThreshold int) (*ArgoCDWebhookHandler, error) {
+	webhookParallelism, err := configProvider.WebhookParallelism(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve webhook parallelism: %w", err)
+	}
+	webhookRefreshWorkers, err := configProvider.WebhookRefreshWorkers(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve webhook refresh workers: %w", err)
+	}
+
 	githubWebhook, err := github.New(github.Options.Secret(set.GetWebhookGitHubSecret()))
 	if err != nil {
 		log.Warnf("Unable to init the GitHub webhook")
@@ -160,7 +170,7 @@ func NewHandler(namespace string, applicationNamespaces []string, webhookParalle
 
 	acdWebhook := ArgoCDWebhookHandler{
 		ns:                            namespace,
-		appNs:                         applicationNamespaces,
+		configProvider:                configProvider,
 		appClientset:                  appClientset,
 		parsers:                       parsers,
 		settingsSrc:                   settingsSrc,
@@ -179,7 +189,7 @@ func NewHandler(namespace string, applicationNamespaces []string, webhookParalle
 	acdWebhook.startWorkerPool(webhookParallelism)
 	acdWebhook.startRefreshWorkers(webhookRefreshWorkers)
 
-	return &acdWebhook
+	return &acdWebhook, nil
 }
 
 func (a *ArgoCDWebhookHandler) startWorkerPool(webhookParallelism int) {
@@ -427,7 +437,12 @@ func (a *ArgoCDWebhookHandler) HandleEvent(payload any) {
 	}
 
 	nsFilter := a.ns
-	if len(a.appNs) > 0 {
+	applicationNamespaces, err := a.configProvider.ApplicationNamespaces(context.Background())
+	if err != nil {
+		log.Errorf("Failed to resolve application namespaces: %v", err)
+		return
+	}
+	if len(applicationNamespaces) > 0 {
 		// Retrieve app from all namespaces
 		nsFilter = ""
 	}
@@ -459,7 +474,7 @@ func (a *ArgoCDWebhookHandler) HandleEvent(payload any) {
 	// nor in the list of enabled namespaces.
 	var filteredApps []v1alpha1.Application
 	for _, app := range apps {
-		if app.Namespace == a.ns || glob.MatchStringInList(a.appNs, app.Namespace, glob.REGEXP) {
+		if app.Namespace == a.ns || glob.MatchStringInList(applicationNamespaces, app.Namespace, glob.REGEXP) {
 			filteredApps = append(filteredApps, *app)
 		}
 	}
