@@ -394,11 +394,11 @@ func crdKustomizeVersions(cfg *appv1.ArgoCDConfiguration) (*appv1.KustomizeOptio
 }
 
 func crdHelpDownload(cfg *appv1.ArgoCDConfiguration) (*settings.Help, bool) {
-	if cfg == nil || cfg.Spec.Server == nil || cfg.Spec.Server.Help == nil ||
-		cfg.Spec.Server.Help.BinaryURLs == nil {
+	help, ok := crdHelp(cfg)
+	if !ok || help == nil || help.BinaryURLs == nil {
 		return nil, false
 	}
-	return &settings.Help{BinaryURLs: copyStringMap(cfg.Spec.Server.Help.BinaryURLs)}, true
+	return &settings.Help{BinaryURLs: copyStringMap(help.BinaryURLs)}, true
 }
 
 func copyStringMap(in map[string]string) map[string]string {

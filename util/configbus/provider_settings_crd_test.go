@@ -98,7 +98,7 @@ func TestProvider_ContentTypesFromCRD(t *testing.T) {
 	assert.Equal(t, []string{"application/json"}, got)
 }
 
-func TestProvider_SelfHealBackoffFromCRD(t *testing.T) {
+func TestProvider_SelfHealRetryFromCRD(t *testing.T) {
 	cfg := testControllerCRD()
 	factor := int32(3)
 	cfg.Spec.Controller.SelfHeal.Backoff = &appv1.BackoffConfig{
@@ -108,12 +108,12 @@ func TestProvider_SelfHealBackoffFromCRD(t *testing.T) {
 	}
 	p := NewCRDProvider(StaticCRDSource{Object: cfg})
 
-	got, err := p.SelfHealBackoff(context.Background())
+	got, err := p.SelfHealRetry(context.Background())
 	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, 2*time.Second, got.Duration)
-	assert.Equal(t, float64(3), got.Factor)
-	assert.Equal(t, 5*time.Minute, got.Cap)
+	require.NotNil(t, got.Backoff)
+	assert.Equal(t, 2*time.Second, got.Backoff.Duration)
+	assert.Equal(t, float64(3), got.Backoff.Factor)
+	assert.Equal(t, 5*time.Minute, got.Backoff.Cap)
 }
 
 func TestProvider_IgnoreNormalizerJQTimeoutFromCRD(t *testing.T) {
@@ -134,7 +134,7 @@ func TestProvider_MappedSettingsRequireCRD(t *testing.T) {
 	require.Error(t, err)
 	_, err = p.IgnoreResourceUpdatesOverrides(context.Background())
 	require.Error(t, err)
-	_, err = p.SelfHealBackoff(context.Background())
+	_, err = p.SelfHealRetry(context.Background())
 	require.Error(t, err)
 }
 

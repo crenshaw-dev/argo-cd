@@ -974,7 +974,10 @@ func (server *ArgoCDServer) watchSettings() {
 		if !reflect.DeepEqual(prevExtConfig, server.settings.ExtensionConfig) {
 			prevExtConfig = server.settings.ExtensionConfig
 			log.Infof("extensions configs modified. Updating proxy registry...")
-			err := server.extensionManager.UpdateExtensionRegistry(server.settings)
+			err := server.extensionManager.UpdateExtensionRegistry(&extension.ExtensionSettings{
+				ExtensionConfig: server.settings.ExtensionConfig,
+				Secrets:         server.settings.Secrets,
+			})
 			if err != nil {
 				log.Errorf("error updating extensions configs: %s", err)
 			} else {
@@ -1314,7 +1317,7 @@ func (server *ArgoCDServer) newHTTPServer(ctx context.Context, port int, grpcWeb
 			handler: mux,
 			urlToHandler: map[string]http.Handler{
 				"/api/badge":          otelhttp.NewHandler(badge.NewHandler(server.AppClientset, server.Namespace, server.configProvider), "server.ArgoCDServer/badge"),
-				common.LogoutEndpoint: otelhttp.NewHandler(logout.NewHandler(server.settingsMgr, server.sessionMgr, server.configProvider), "server.ArgoCDServer/logout"),
+				common.LogoutEndpoint: otelhttp.NewHandler(logout.NewHandler(server.sessionMgr, server.configProvider), "server.ArgoCDServer/logout"),
 			},
 			contentTypeToHandler: map[string]http.Handler{
 				"application/grpc-web+proto": grpcWebHandler,
@@ -1393,7 +1396,7 @@ func (server *ArgoCDServer) newHTTPServer(ctx context.Context, port int, grpcWeb
 
 	// Webhook handler for git events (Note: cache timeouts are hardcoded because API server does not write to cache and not really using them)
 	argoDB := db.NewDB(server.Namespace, server.settingsMgr, server.KubeClientset)
-	acdWebhookHandler, err := webhook.NewHandler(server.Namespace, server.configProvider, server.AppClientset, server.appLister, server.settings, server.settingsMgr, server.RepoServerCache, server.Cache, argoDB, server.settingsMgr.GetMaxWebhookPayloadSize(), server.settingsMgr.GetWebhookRefreshJitter(), server.settingsMgr.GetWebhookRefreshJitterThreshold())
+	acdWebhookHandler, err := webhook.NewHandler(server.Namespace, server.configProvider, server.AppClientset, server.appLister, server.settings, server.settingsMgr, server.RepoServerCache, server.Cache, argoDB)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create webhook handler: %w", err)
 	}

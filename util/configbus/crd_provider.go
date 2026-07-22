@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/argoproj/argo-cd/v3/util/settings"
@@ -67,6 +66,14 @@ func (p *CRDProvider) UnsubscribeCRD(subCh chan<- struct{}) {
 	}
 }
 
+func (p *CRDProvider) Accounts(_ context.Context) (map[string]settings.Account, error) {
+	return requireCRDField(p, "Accounts", crdAccounts)
+}
+
+func (p *CRDProvider) AdditionalURLs(_ context.Context) ([]string, error) {
+	return requireCRDField(p, "AdditionalURLs", crdAdditionalURLs)
+}
+
 func (p *CRDProvider) AllowedNodeLabels(_ context.Context) ([]string, error) {
 	return requireCRDField(p, "AllowedNodeLabels", crdAllowedNodeLabels)
 }
@@ -81,6 +88,10 @@ func (p *CRDProvider) AppInstanceLabelKey(_ context.Context) (string, error) {
 
 func (p *CRDProvider) ApplicationDeepLinks(_ context.Context) ([]settings.DeepLink, error) {
 	return requireCRDField(p, "ApplicationDeepLinks", crdApplicationLinks)
+}
+
+func (p *CRDProvider) ApplicationFineGrainedRBACInheritanceDisabled(_ context.Context) (bool, error) {
+	return requireCRDField(p, "ApplicationFineGrainedRBACInheritanceDisabled", crdApplicationFineGrainedRBACInheritanceDisabled)
 }
 
 func (p *CRDProvider) CommitAuthorEmail(_ context.Context) (string, error) {
@@ -107,6 +118,10 @@ func (p *CRDProvider) EnabledSourceTypes(_ context.Context) (map[string]bool, er
 	return requireCRDField(p, "EnabledSourceTypes", crdEnabledSourceTypes)
 }
 
+func (p *CRDProvider) ExcludeEventLabelKeys(_ context.Context) ([]string, error) {
+	return requireCRDField(p, "ExcludeEventLabelKeys", crdExcludeEventLabelKeys)
+}
+
 func (p *CRDProvider) ExecEnabled(_ context.Context) (bool, error) {
 	return requireCRDField(p, "ExecEnabled", crdExecEnabled)
 }
@@ -115,16 +130,53 @@ func (p *CRDProvider) ExecShells(_ context.Context) ([]string, error) {
 	return requireCRDField(p, "ExecShells", crdExecShells)
 }
 
+func (p *CRDProvider) ExtensionConfig(_ context.Context) (map[string]string, error) {
+	return requireCRDFieldErr(p, "ExtensionConfig", crdExtensionConfig)
+}
+
 func (p *CRDProvider) GitRequestTimeout(_ context.Context) (time.Duration, error) {
 	return 0, ErrNotConfigured
+}
+
+func (p *CRDProvider) GlobalProjectsSettings(_ context.Context) ([]settings.GlobalProjectSettings, error) {
+	return requireCRDField(p, "GlobalProjectsSettings", crdGlobalProjects)
+}
+
+func (p *CRDProvider) GoogleAnalytics(_ context.Context) (settings.GoogleAnalytics, error) {
+	v, err := requireCRDField(p, "GoogleAnalytics", crdGoogleAnalytics)
+	if err != nil {
+		return settings.GoogleAnalytics{}, err
+	}
+	if v == nil {
+		return settings.GoogleAnalytics{}, nil
+	}
+	return *v, nil
 }
 
 func (p *CRDProvider) HardReconciliationTimeout(_ context.Context) (time.Duration, error) {
 	return requireCRDField(p, "HardReconciliationTimeout", crdHardReconciliationTimeout)
 }
 
-func (p *CRDProvider) HelmSettings(_ context.Context) (*v1alpha1.HelmOptions, error) {
-	return requireCRDFieldErr(p, "HelmSettings", crdHelmSettings)
+func (p *CRDProvider) HelmSettings(_ context.Context) (v1alpha1.HelmOptions, error) {
+	v, err := requireCRDFieldErr(p, "HelmSettings", crdHelmSettings)
+	if err != nil {
+		return v1alpha1.HelmOptions{}, err
+	}
+	if v == nil {
+		return v1alpha1.HelmOptions{}, nil
+	}
+	return *v, nil
+}
+
+func (p *CRDProvider) Help(_ context.Context) (settings.Help, error) {
+	v, err := requireCRDField(p, "Help", crdHelp)
+	if err != nil {
+		return settings.Help{}, err
+	}
+	if v == nil {
+		return settings.Help{}, nil
+	}
+	return *v, nil
 }
 
 func (p *CRDProvider) HydratorReadmeTemplate(_ context.Context) (string, error) {
@@ -154,6 +206,14 @@ func (p *CRDProvider) IgnoreResourceUpdatesOverrides(_ context.Context) (map[str
 	return settings.BuildIgnoreResourceUpdatesOverrides(compareOptions, resourceOverrides), nil
 }
 
+func (p *CRDProvider) InClusterEnabled(_ context.Context) (bool, error) {
+	return requireCRDField(p, "InClusterEnabled", crdInClusterEnabled)
+}
+
+func (p *CRDProvider) IncludeEventLabelKeys(_ context.Context) ([]string, error) {
+	return requireCRDField(p, "IncludeEventLabelKeys", crdIncludeEventLabelKeys)
+}
+
 func (p *CRDProvider) InstallationID(_ context.Context) (string, error) {
 	return requireCRDField(p, "InstallationID", crdInstallationID)
 }
@@ -170,12 +230,35 @@ func (p *CRDProvider) IsImpersonationEnforced(_ context.Context) (bool, error) {
 	return requireCRDField(p, "IsImpersonationEnforced", crdCfgImpersonationEnforced)
 }
 
-func (p *CRDProvider) KustomizeSettings(_ context.Context) (*v1alpha1.KustomizeOptions, error) {
-	return requireCRDFieldErr(p, "KustomizeSettings", crdKustomizeBuildOptions)
+func (p *CRDProvider) KustomizeSettings(_ context.Context) (v1alpha1.KustomizeOptions, error) {
+	v, err := requireCRDFieldErr(p, "KustomizeSettings", crdKustomizeBuildOptions)
+	if err != nil {
+		return v1alpha1.KustomizeOptions{}, err
+	}
+	if v == nil {
+		return v1alpha1.KustomizeOptions{}, nil
+	}
+	return *v, nil
+}
+
+func (p *CRDProvider) MaxPodLogsToRender(_ context.Context) (int64, error) {
+	return requireCRDField(p, "MaxPodLogsToRender", crdMaxPodLogsToRender)
+}
+
+func (p *CRDProvider) MaxWebhookPayloadSize(_ context.Context) (int64, error) {
+	return requireCRDField(p, "MaxWebhookPayloadSize", crdMaxWebhookPayloadSize)
 }
 
 func (p *CRDProvider) MetricsClusterLabels(_ context.Context) ([]string, error) {
 	return requireCRDField(p, "MetricsClusterLabels", crdControllerMetricsClusterLabels)
+}
+
+func (p *CRDProvider) OIDCLogoutURL(_ context.Context) (string, error) {
+	return requireCRDField(p, "OIDCLogoutURL", crdOIDCLogoutURL)
+}
+
+func (p *CRDProvider) PasswordPattern(_ context.Context) (string, error) {
+	return requireCRDField(p, "PasswordPattern", crdPasswordPattern)
 }
 
 func (p *CRDProvider) PersistResourceHealth(_ context.Context) (bool, error) {
@@ -198,6 +281,10 @@ func (p *CRDProvider) RepoErrorGracePeriod(_ context.Context) (time.Duration, er
 	return requireCRDField(p, "RepoErrorGracePeriod", crdControllerRepoErrorGracePeriodSeconds)
 }
 
+func (p *CRDProvider) RequireOverridePrivilegeForRevisionSync(_ context.Context) (bool, error) {
+	return requireCRDField(p, "RequireOverridePrivilegeForRevisionSync", crdRequireOverridePrivilegeForRevisionSync)
+}
+
 func (p *CRDProvider) ResourceCompareOptions(_ context.Context) (settings.ArgoCDDiffOptions, error) {
 	return requireCRDFieldErr(p, "ResourceCompareOptions", crdResourceCompareOptions)
 }
@@ -214,16 +301,23 @@ func (p *CRDProvider) ResourceOverrides(_ context.Context) (map[string]v1alpha1.
 	return requireCRDFieldErr(p, "ResourceOverrides", crdResourceOverrides)
 }
 
-func (p *CRDProvider) ResourcesFilter(_ context.Context) (*settings.ResourcesFilter, error) {
-	return requireCRDField(p, "ResourcesFilter", crdCfgResourcesFilter)
+func (p *CRDProvider) ResourcesFilter(_ context.Context) (settings.ResourcesFilter, error) {
+	v, err := requireCRDField(p, "ResourcesFilter", crdCfgResourcesFilter)
+	if err != nil {
+		return settings.ResourcesFilter{}, err
+	}
+	if v == nil {
+		return settings.ResourcesFilter{}, nil
+	}
+	return *v, nil
 }
 
 func (p *CRDProvider) RespectRBAC(_ context.Context) (int, error) {
 	return requireCRDField(p, "RespectRBAC", crdCfgRespectRBAC)
 }
 
-func (p *CRDProvider) SelfHealBackoff(_ context.Context) (*wait.Backoff, error) {
-	return requireCRDField(p, "SelfHealBackoff", crdSelfHealBackoff)
+func (p *CRDProvider) SelfHealRetry(_ context.Context) (SelfHealRetry, error) {
+	return requireCRDField(p, "SelfHealRetry", crdSelfHealRetry)
 }
 
 func (p *CRDProvider) SelfHealTimeout(_ context.Context) (time.Duration, error) {
@@ -236,6 +330,10 @@ func (p *CRDProvider) SensitiveAnnotations(_ context.Context) (map[string]bool, 
 
 func (p *CRDProvider) ServerSideDiff(_ context.Context) (bool, error) {
 	return requireCRDField(p, "ServerSideDiff", crdControllerDiffServerSide)
+}
+
+func (p *CRDProvider) ServerURL(_ context.Context) (string, error) {
+	return requireCRDField(p, "ServerURL", crdServerURL)
 }
 
 func (p *CRDProvider) StatusBadgeEnabled(_ context.Context) (bool, error) {
@@ -259,6 +357,18 @@ func (p *CRDProvider) SyncTimeout(_ context.Context) (time.Duration, error) {
 
 func (p *CRDProvider) TrackingMethod(_ context.Context) (string, error) {
 	return requireCRDField(p, "TrackingMethod", crdResourceTrackingMethod)
+}
+
+func (p *CRDProvider) UserSessionDuration(_ context.Context) (time.Duration, error) {
+	return requireCRDField(p, "UserSessionDuration", crdUserSessionDuration)
+}
+
+func (p *CRDProvider) WebhookRefreshJitter(_ context.Context) (time.Duration, error) {
+	return requireCRDField(p, "WebhookRefreshJitter", crdWebhookRefreshJitter)
+}
+
+func (p *CRDProvider) WebhookRefreshJitterThreshold(_ context.Context) (int, error) {
+	return requireCRDField(p, "WebhookRefreshJitterThreshold", crdWebhookRefreshJitterThreshold)
 }
 
 // ---------------------------------------------------------------------------

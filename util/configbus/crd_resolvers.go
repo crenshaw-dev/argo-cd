@@ -1157,13 +1157,13 @@ func crdServerContentTypes(cfg *appv1.ArgoCDConfiguration) ([]string, bool) {
 	return append([]string(nil), cfg.Spec.Server.APIContentTypes...), true
 }
 
-func crdSelfHealBackoff(cfg *appv1.ArgoCDConfiguration) (*wait.Backoff, bool) {
+func crdSelfHealRetry(cfg *appv1.ArgoCDConfiguration) (SelfHealRetry, bool) {
 	if cfg.Spec.Controller == nil {
-		return nil, false
+		return SelfHealRetry{}, false
 	}
 	if cfg.Spec.Controller.SelfHeal == nil || cfg.Spec.Controller.SelfHeal.Backoff == nil {
-		// Absent backoff subgroup means no exponential self-heal backoff.
-		return nil, true
+		// Absent backoff subgroup means flat SelfHealTimeout (no exponential backoff).
+		return SelfHealRetry{Backoff: nil}, true
 	}
 	b := cfg.Spec.Controller.SelfHeal.Backoff
 	out := &wait.Backoff{
@@ -1180,7 +1180,7 @@ func crdSelfHealBackoff(cfg *appv1.ArgoCDConfiguration) (*wait.Backoff, bool) {
 	if b.MaxDuration != nil {
 		out.Cap = b.MaxDuration.Duration
 	}
-	return out, true
+	return SelfHealRetry{Backoff: out}, true
 }
 
 func crdReposerverOCIMediaTypes(cfg *appv1.ArgoCDConfiguration) ([]string, bool) {
@@ -1201,4 +1201,134 @@ func crdReposerverCMPTarExcludedGlobs(cfg *appv1.ArgoCDConfiguration) ([]string,
 		return []string{}, true
 	}
 	return append([]string(nil), cfg.Spec.RepoServer.Plugin.TarExclusionGlobs...), true
+}
+
+func crdServerURL(cfg *appv1.ArgoCDConfiguration) (string, bool) {
+	urls := crdServerURLs(cfg)
+	if urls == nil {
+		return "", false
+	}
+	if len(urls) == 0 {
+		return "", true
+	}
+	return urls[0], true
+}
+
+func crdAdditionalURLs(cfg *appv1.ArgoCDConfiguration) ([]string, bool) {
+	urls := crdServerURLs(cfg)
+	if urls == nil {
+		return nil, false
+	}
+	if len(urls) <= 1 {
+		return []string{}, true
+	}
+	return append([]string(nil), urls[1:]...), true
+}
+
+func crdApplicationFineGrainedRBACInheritanceDisabled(cfg *appv1.ArgoCDConfiguration) (bool, bool) {
+	if cfg.Spec.Server != nil && cfg.Spec.Server.RBAC != nil {
+		return crdBoolNot(cfg.Spec.Server.RBAC.ApplicationFineGrainedInheritanceEnabled)
+	}
+	return false, false
+}
+
+func crdIncludeEventLabelKeys(cfg *appv1.ArgoCDConfiguration) ([]string, bool) {
+	if cfg.Spec.Controller == nil || cfg.Spec.Controller.Resource == nil || cfg.Spec.Controller.Resource.EventLabels == nil {
+		return nil, false
+	}
+	return append([]string(nil), cfg.Spec.Controller.Resource.EventLabels.IncludeKeyGlobs...), true
+}
+
+func crdExcludeEventLabelKeys(cfg *appv1.ArgoCDConfiguration) ([]string, bool) {
+	if cfg.Spec.Controller == nil || cfg.Spec.Controller.Resource == nil || cfg.Spec.Controller.Resource.EventLabels == nil {
+		return nil, false
+	}
+	return append([]string(nil), cfg.Spec.Controller.Resource.EventLabels.ExcludeKeyGlobs...), true
+}
+
+func crdGoogleAnalytics(cfg *appv1.ArgoCDConfiguration) (*settings.GoogleAnalytics, bool) {
+	if cfg.Spec.Server == nil || cfg.Spec.Server.GoogleAnalytics == nil {
+		return nil, false
+	}
+	ga := cfg.Spec.Server.GoogleAnalytics
+	return &settings.GoogleAnalytics{
+		TrackingID:     ga.TrackingID,
+		AnonymizeUsers: ga.AnonymizeUsers,
+	}, true
+}
+
+func crdHelp(cfg *appv1.ArgoCDConfiguration) (*settings.Help, bool) {
+	if cfg.Spec.Server == nil || cfg.Spec.Server.Help == nil {
+		return nil, false
+	}
+	h := cfg.Spec.Server.Help
+	out := &settings.Help{BinaryURLs: copyStringMap(h.BinaryURLs)}
+	if h.Chat != nil {
+		out.ChatURL = h.Chat.URL
+		out.ChatText = h.Chat.Text
+	}
+	return out, true
+}
+
+func crdInClusterEnabled(cfg *appv1.ArgoCDConfiguration) (bool, bool) {
+	if cfg.Spec.Cluster != nil {
+		return crdBool(cfg.Spec.Cluster.InClusterEnabled)
+	}
+	return false, false
+}
+
+func crdMaxPodLogsToRender(cfg *appv1.ArgoCDConfiguration) (int64, bool) {
+	if cfg.Spec.Server != nil && cfg.Spec.Server.Logs != nil {
+		return crdInt64FromInt64(cfg.Spec.Server.Logs.MaxPodsToRender)
+	}
+	return 0, false
+}
+
+func crdMaxWebhookPayloadSize(cfg *appv1.ArgoCDConfiguration) (int64, bool) {
+	if cfg.Spec.Server != nil && cfg.Spec.Server.Webhook != nil {
+		return crdInt64FromQty(cfg.Spec.Server.Webhook.MaxPayloadSize)
+	}
+	return 0, false
+}
+
+func crdOIDCLogoutURL(cfg *appv1.ArgoCDConfiguration) (string, bool) {
+	if cfg.Spec.Server == nil || cfg.Spec.Server.OIDC == nil {
+		return "", false
+	}
+	return cfg.Spec.Server.OIDC.LogoutURL, true
+}
+
+func crdPasswordPattern(cfg *appv1.ArgoCDConfiguration) (string, bool) {
+	if cfg.Spec.Server != nil && cfg.Spec.Server.Users != nil {
+		return crdStr(cfg.Spec.Server.Users.PasswordRegex)
+	}
+	return "", false
+}
+
+func crdRequireOverridePrivilegeForRevisionSync(cfg *appv1.ArgoCDConfiguration) (bool, bool) {
+	if cfg.Spec.Controller != nil && cfg.Spec.Controller.Sync != nil {
+		return crdBool(cfg.Spec.Controller.Sync.RequireOverridePrivilegeForRevisionSync)
+	}
+	return false, false
+}
+
+func crdUserSessionDuration(cfg *appv1.ArgoCDConfiguration) (time.Duration, bool) {
+	if cfg.Spec.Server != nil && cfg.Spec.Server.Users != nil {
+		return crdDur(cfg.Spec.Server.Users.SessionDuration)
+	}
+	return 0, false
+}
+
+func crdWebhookRefreshJitter(cfg *appv1.ArgoCDConfiguration) (time.Duration, bool) {
+	if cfg.Spec.Server != nil && cfg.Spec.Server.Webhook != nil && cfg.Spec.Server.Webhook.Refresh != nil {
+		return crdDur(cfg.Spec.Server.Webhook.Refresh.Jitter)
+	}
+	return 0, false
+}
+
+func crdWebhookRefreshJitterThreshold(cfg *appv1.ArgoCDConfiguration) (int, bool) {
+	if cfg.Spec.Server != nil && cfg.Spec.Server.Webhook != nil && cfg.Spec.Server.Webhook.Refresh != nil {
+		return crdInt(cfg.Spec.Server.Webhook.Refresh.JitterThreshold)
+	}
+	return 0, false
 }
