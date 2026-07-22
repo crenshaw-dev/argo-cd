@@ -3301,6 +3301,7 @@ func TestProcessRequestedAppOperation_SyncTimeout(t *testing.T) {
 			}
 			override := configbusmocks.NewProvider(t)
 			override.EXPECT().SyncTimeout(mock.Anything).Return(tc.syncTimeout, nil)
+			// Fall through for getters hit while emitting events / resolving projects.
 			override.EXPECT().GlobalProjectsSettings(mock.Anything).Return(nil, configbus.ErrNotConfigured).Maybe()
 			override.EXPECT().IncludeEventLabelKeys(mock.Anything).Return(nil, configbus.ErrNotConfigured).Maybe()
 			override.EXPECT().ExcludeEventLabelKeys(mock.Anything).Return(nil, configbus.ErrNotConfigured).Maybe()
