@@ -458,18 +458,19 @@ func TestGracefulShutdown(t *testing.T) {
 	kubeclientset := fake.NewSimpleClientset(test.NewFakeConfigMap(), test.NewFakeSecret())
 	redis, redisCloser := test.NewInMemoryRedis()
 	defer redisCloser()
+	opts := ArgoCDServerOpts{
+		ListenPort:    port,
+		Namespace:     test.FakeArgoCDNamespace,
+		KubeClientset: kubeclientset,
+		AppClientset:  apps.NewSimpleClientset(),
+		RepoClientset: mockRepoClient,
+		RedisClient:   redis,
+	}
 	s := NewServer(
 		t.Context(),
-		ArgoCDServerOpts{
-			ListenPort:    port,
-			Namespace:     test.FakeArgoCDNamespace,
-			KubeClientset: kubeclientset,
-			AppClientset:  apps.NewSimpleClientset(),
-			RepoClientset: mockRepoClient,
-			RedisClient:   redis,
-		},
+		opts,
 		ApplicationSetOpts{},
-		testServerCRDSource(ArgoCDServerOpts{}),
+		testServerCRDSource(opts),
 	)
 
 	projInformerCancel := test.StartInformer(s.projInformer)
@@ -541,18 +542,19 @@ clientSecret: $oidc.myoidc.clientSecret
 	kubeclientset := fake.NewSimpleClientset(cm, secret)
 	redis, redisCloser := test.NewInMemoryRedis()
 	defer redisCloser()
+	opts := ArgoCDServerOpts{
+		ListenPort:    port,
+		Namespace:     test.FakeArgoCDNamespace,
+		KubeClientset: kubeclientset,
+		AppClientset:  apps.NewSimpleClientset(),
+		RepoClientset: mockRepoClient,
+		RedisClient:   redis,
+	}
 	s := NewServer(
 		t.Context(),
-		ArgoCDServerOpts{
-			ListenPort:    port,
-			Namespace:     test.FakeArgoCDNamespace,
-			KubeClientset: kubeclientset,
-			AppClientset:  apps.NewSimpleClientset(),
-			RepoClientset: mockRepoClient,
-			RedisClient:   redis,
-		},
+		opts,
 		ApplicationSetOpts{},
-		testServerCRDSource(ArgoCDServerOpts{}),
+		testServerCRDSource(opts),
 	)
 	projInformerCancel := test.StartInformer(s.projInformer)
 	defer projInformerCancel()
