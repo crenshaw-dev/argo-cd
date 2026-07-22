@@ -412,11 +412,9 @@ func NewServer(ctx context.Context, opts ArgoCDServerOpts, appsetOpts Applicatio
 	dbInstance := db.NewDB(opts.Namespace, settingsMgr, opts.KubeClientset)
 	logger := log.NewEntry(log.StandardLogger())
 
-	sg := extension.NewDefaultSettingsGetter(settingsMgr)
 	ag := extension.NewDefaultApplicationGetter(appLister)
 	pg := extension.NewDefaultProjectGetter(projLister, dbInstance)
 	ug := extension.NewDefaultUserGetter(policyEnf)
-	em := extension.NewManager(logger, opts.Namespace, sg, ag, pg, dbInstance, enf, ug)
 	noopShutdown := func() {
 		log.Error("API Server Shutdown function called but server is not started yet.")
 	}
@@ -442,7 +440,6 @@ func NewServer(ctx context.Context, opts ArgoCDServerOpts, appsetOpts Applicatio
 		apiFactory:         apiFactory,
 		secretInformer:     secretInformer,
 		configMapInformer:  configMapInformer,
-		extensionManager:   em,
 		Shutdown:           noopShutdown,
 		stopCh:             make(chan os.Signal, 1),
 	}
@@ -487,6 +484,8 @@ func NewServer(ctx context.Context, opts ArgoCDServerOpts, appsetOpts Applicatio
 		configbus.NewSettingsManagerProvider(settingsMgr),
 		configbus.NewEnvProvider(),
 	)
+	sg := extension.NewDefaultSettingsGetter(a.configProvider, settingsMgr)
+	a.extensionManager = extension.NewManager(logger, opts.Namespace, sg, ag, pg, dbInstance, enf, ug)
 
 	err = a.logInClusterWarnings()
 	if err != nil {
@@ -987,7 +986,10 @@ func (server *ArgoCDServer) watchSettings() {
 		if !reflect.DeepEqual(prevExtConfig, server.settings.ExtensionConfig) {
 			prevExtConfig = server.settings.ExtensionConfig
 			log.Infof("extensions configs modified. Updating proxy registry...")
-			err := server.extensionManager.UpdateExtensionRegistry(server.settings)
+			err := server.extensionManager.UpdateExtensionRegistry(&extension.ExtensionSettings{
+				ExtensionConfig: server.settings.ExtensionConfig,
+				Secrets:         server.settings.Secrets,
+			})
 			if err != nil {
 				log.Errorf("error updating extensions configs: %s", err)
 			} else {
@@ -1164,7 +1166,7 @@ func newArgoCDServiceSet(a *ArgoCDServer) (*ArgoCDServiceSet, error) {
 	if maxConcurrentLoginRequestsCount > 0 {
 		loginRateLimiter = session.NewLoginRateLimiter(maxConcurrentLoginRequestsCount)
 	}
-	sessionService := session.NewServer(a.sessionMgr, a.settingsMgr, a, a.policyEnforcer, loginRateLimiter)
+	sessionService := session.NewServer(a.sessionMgr, a.settingsMgr, a, a.policyEnforcer, loginRateLimiter, a.configProvider)
 	projectLock := sync.NewKeyLock()
 	applicationService, appResourceTreeFn := application.NewServer(
 		a.Namespace,
@@ -1326,7 +1328,7 @@ func (server *ArgoCDServer) newHTTPServer(ctx context.Context, port int, grpcWeb
 			handler: mux,
 			urlToHandler: map[string]http.Handler{
 				"/api/badge":          otelhttp.NewHandler(badge.NewHandler(server.AppClientset, server.Namespace, server.configProvider), "server.ArgoCDServer/badge"),
-				common.LogoutEndpoint: otelhttp.NewHandler(logout.NewHandler(server.settingsMgr, server.sessionMgr, server.configProvider), "server.ArgoCDServer/logout"),
+				common.LogoutEndpoint: otelhttp.NewHandler(logout.NewHandler(server.sessionMgr, server.configProvider), "server.ArgoCDServer/logout"),
 			},
 			contentTypeToHandler: map[string]http.Handler{
 				"application/grpc-web+proto": grpcWebHandler,
