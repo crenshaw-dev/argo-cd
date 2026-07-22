@@ -805,11 +805,6 @@ func Test_GetVersionsInfo_error_redacted(t *testing.T) {
 
 func TestLoadCacheSettings(t *testing.T) {
 	t.Parallel()
-	_, settingsManager := fixtures(t.Context(), map[string]string{
-		"application.instanceLabelKey":       "testLabel",
-		"application.resourceTrackingMethod": string(appv1.TrackingMethodLabel),
-		"installationID":                     "123456789",
-	})
 	jqTimeout := 2 * time.Second
 	cfg := configbus.TestControllerCRDSource().(configbus.StaticCRDSource).Object.DeepCopy()
 	require.NotNil(t, cfg)
