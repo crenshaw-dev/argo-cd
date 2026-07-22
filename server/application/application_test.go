@@ -55,10 +55,10 @@ import (
 	"github.com/argoproj/argo-cd/v3/server/rbacpolicy"
 	"github.com/argoproj/argo-cd/v3/test"
 	"github.com/argoproj/argo-cd/v3/util/argo"
-	"github.com/argoproj/argo-cd/v3/util/configbus"
 	"github.com/argoproj/argo-cd/v3/util/assets"
 	"github.com/argoproj/argo-cd/v3/util/cache"
 	"github.com/argoproj/argo-cd/v3/util/cache/appstate"
+	"github.com/argoproj/argo-cd/v3/util/configbus"
 	"github.com/argoproj/argo-cd/v3/util/db"
 	"github.com/argoproj/argo-cd/v3/util/grpc"
 	"github.com/argoproj/argo-cd/v3/util/rbac"
@@ -3286,7 +3286,8 @@ func refreshAnnotationRemover(t *testing.T, ctx context.Context, patched *int32,
 			a.SetAnnotations(map[string]string{})
 			a.SetResourceVersion("999")
 			_, err = appServer.appclientset.ArgoprojV1alpha1().Applications(a.Namespace).Update(
-				t.Context(), a, metav1.UpdateOptions{})
+				t.Context(), a, metav1.UpdateOptions{},
+			)
 			require.NoError(t, err)
 			atomic.AddInt32(patched, 1)
 			ch <- ""
@@ -5103,7 +5104,8 @@ func TestGetApplicationClusterConfig(t *testing.T) {
 			a.Spec.Project = "proj-impersonate"
 		})
 
-		appServer := newTestAppServerWithEnforcerConfigure(t, f,
+		appServer := newTestAppServerWithEnforcerConfigure(
+			t, f,
 			map[string]string{"application.sync.impersonation.enabled": "true"},
 			app, projWithSA,
 		)
@@ -5120,7 +5122,8 @@ func TestGetApplicationClusterConfig(t *testing.T) {
 		}
 
 		app := newTestApp()
-		appServer := newTestAppServerWithEnforcerConfigure(t, f,
+		appServer := newTestAppServerWithEnforcerConfigure(
+			t, f,
 			map[string]string{"application.sync.impersonation.enabled": "true"},
 			app,
 		)
@@ -5146,7 +5149,8 @@ func TestGetApplicationClusterConfig(t *testing.T) {
 		}
 
 		app := newTestApp()
-		appServer := newTestAppServerWithEnforcerConfigure(t, f,
+		appServer := newTestAppServerWithEnforcerConfigure(
+			t, f,
 			map[string]string{
 				"application.sync.impersonation.enabled":  "true",
 				"application.sync.impersonation.enforced": "false",
@@ -5195,7 +5199,8 @@ func TestGetApplicationClusterConfig(t *testing.T) {
 			a.Spec.Project = "proj-impersonate"
 		})
 
-		appServer := newTestAppServerWithEnforcerConfigure(t, f,
+		appServer := newTestAppServerWithEnforcerConfigure(
+			t, f,
 			map[string]string{
 				"application.sync.impersonation.enabled":  "true",
 				"application.sync.impersonation.enforced": "false",
@@ -5235,7 +5240,8 @@ func TestGetUnstructuredLiveResourceOrAppWithImpersonation(t *testing.T) {
 		a.Spec.Project = "proj-impersonate"
 	})
 
-	appServer := newTestAppServerWithEnforcerConfigure(t, f,
+	appServer := newTestAppServerWithEnforcerConfigure(
+		t, f,
 		map[string]string{"application.sync.impersonation.enabled": "true"},
 		app, projWithSA,
 	)
