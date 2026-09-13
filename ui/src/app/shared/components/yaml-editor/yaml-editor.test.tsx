@@ -80,7 +80,7 @@ describe('YamlEditor live freeze', () => {
         rerender(React.createElement(Context.Provider, {value: mockContext}, React.createElement(YamlEditor, {input: liveB, onSave: jest.fn()})));
 
         expect(lastMonacoText).toBe(dumpYaml(liveA));
-        expect(fakeModel.pushEditOperations).not.toHaveBeenCalled();
+        expect(fakeModel.setValue).not.toHaveBeenCalled();
         expect(fakeModel.lines).toContain('# user was typing');
     });
 
@@ -96,9 +96,11 @@ describe('YamlEditor live freeze', () => {
             fireEvent.click(screen.getByRole('button', {name: /Cancel/i}));
         });
 
-        // The typed text only lives in the buffer, so Cancel has to clear it explicitly.
+        // The typed text only lives in the buffer, so Cancel has to clear it explicitly, and via
+        // setValue so that undo cannot bring the abandoned edits back.
         expect(fakeModel.lines).toBe(dumpYaml(liveB));
-        expect(fakeModel.setValue).not.toHaveBeenCalled();
+        expect(fakeModel.setValue).toHaveBeenCalledWith(dumpYaml(liveB));
+        expect(fakeModel.pushEditOperations).not.toHaveBeenCalled();
         expect(lastMonacoText).toBe(dumpYaml(liveB));
 
         rerender(React.createElement(Context.Provider, {value: mockContext}, React.createElement(YamlEditor, {input: liveC, onSave: jest.fn()})));

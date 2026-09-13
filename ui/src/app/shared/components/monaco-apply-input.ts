@@ -15,10 +15,15 @@ export function isEqualInput(first?: EditorInput, second?: EditorInput) {
     return first && second && first.text === second.text && (first.language || '') === (second.language || '');
 }
 
-// Replace a document's contents in place. setValue would reset the view and scroll the editor back to
-// the top, and editor.executeEdits is a no-op while the editor is readOnly, so edit the model itself.
+// Replace a document's contents with text the user must not be able to get back. setValue discards
+// the model's edit history, so undo cannot resurrect a stale refresh or an abandoned edit and save it
+// over the cluster. An edit operation would keep both on the undo stack. Callers are expected to
+// restore the view state afterwards, since setValue resets it.
+//
+// This deliberately does not go through editor.executeEdits, which does nothing while the editor is
+// readOnly, and the manifest view is readOnly whenever it is not being edited.
 export function replaceModelText(model: monacoEditor.editor.ITextModel, text: string): void {
-    model.pushEditOperations([], [{range: model.getFullModelRange(), text}], () => null);
+    model.setValue(text);
 }
 
 // Update an existing Monaco editor's document without treating a live-text refresh as a new file.

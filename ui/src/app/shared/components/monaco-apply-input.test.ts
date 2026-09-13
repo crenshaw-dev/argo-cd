@@ -54,7 +54,7 @@ function createFakeMonaco(created: ReturnType<typeof createFakeModel>[]) {
 describe('applyEditorInput', () => {
     const prev: EditorInput = {text: 'apiVersion: v1\nkind: ConfigMap\n', language: 'yaml'};
 
-    test('text change edits the same model in place and restores view state', () => {
+    test('text change replaces the same model and restores view state', () => {
         const model = createFakeModel(prev.text, 'yaml');
         const {editor, mocks, viewState} = createFakeEditor(model);
         const created: ReturnType<typeof createFakeModel>[] = [];
@@ -63,18 +63,18 @@ describe('applyEditorInput', () => {
 
         applyEditorInput(monaco, editor, prev, next);
 
-        expect(model.pushEditOperations).toHaveBeenCalledWith([], [{range: FULL_RANGE, text: next.text}], expect.any(Function));
+        expect(model.setValue).toHaveBeenCalledWith(next.text);
         expect(model.text).toBe(next.text);
         expect(mocks.setModel).not.toHaveBeenCalled();
         expect(monaco.editor.createModel).not.toHaveBeenCalled();
         expect(mocks.saveViewState).toHaveBeenCalled();
         expect(mocks.restoreViewState).toHaveBeenCalledWith(viewState);
         expect(model.dispose).not.toHaveBeenCalled();
-        expect(mocks.saveViewState.mock.invocationCallOrder[0]).toBeLessThan(model.pushEditOperations.mock.invocationCallOrder[0]);
-        expect(model.pushEditOperations.mock.invocationCallOrder[0]).toBeLessThan(mocks.restoreViewState.mock.invocationCallOrder[0]);
+        expect(mocks.saveViewState.mock.invocationCallOrder[0]).toBeLessThan(model.setValue.mock.invocationCallOrder[0]);
+        expect(model.setValue.mock.invocationCallOrder[0]).toBeLessThan(mocks.restoreViewState.mock.invocationCallOrder[0]);
     });
 
-    test('updates the document without setValue or editor-level edits, which readOnly would block', () => {
+    test('refreshes cannot be undone back into the buffer and saved over the cluster', () => {
         const model = createFakeModel(prev.text, 'yaml');
         const {editor, mocks} = createFakeEditor(model);
         const monaco = createFakeMonaco([]);
@@ -82,7 +82,10 @@ describe('applyEditorInput', () => {
 
         applyEditorInput(monaco, editor, prev, next);
 
-        expect(model.setValue).not.toHaveBeenCalled();
+        // Only setValue drops the model's edit history. An edit operation would leave every stale
+        // refresh on the undo stack, reachable with a ctrl-z once the user enters edit mode.
+        expect(model.pushEditOperations).not.toHaveBeenCalled();
+        // executeEdits would also be a no-op, because the manifest view is readOnly until edited.
         expect(mocks.executeEdits).not.toHaveBeenCalled();
         expect(model.text).toBe(next.text);
     });
@@ -94,7 +97,7 @@ describe('applyEditorInput', () => {
 
         applyEditorInput(monaco, editor, prev, {...prev});
 
-        expect(model.pushEditOperations).not.toHaveBeenCalled();
+        expect(model.setValue).not.toHaveBeenCalled();
         expect(mocks.setModel).not.toHaveBeenCalled();
         expect(mocks.saveViewState).not.toHaveBeenCalled();
         expect(mocks.restoreViewState).not.toHaveBeenCalled();
@@ -109,7 +112,7 @@ describe('applyEditorInput', () => {
 
         applyEditorInput(monaco, editor, prev, next);
 
-        expect(model.pushEditOperations).not.toHaveBeenCalled();
+        expect(model.setValue).not.toHaveBeenCalled();
         expect(monaco.editor.createModel).toHaveBeenCalledWith(next.text, 'json');
         expect(mocks.setModel).toHaveBeenCalledWith(created[0]);
         expect(model.dispose).toHaveBeenCalled();
@@ -126,7 +129,7 @@ describe('applyEditorInput', () => {
 
         applyEditorInput(monaco, editor, prev, next);
 
-        expect(model.pushEditOperations).toHaveBeenCalledWith([], [{range: FULL_RANGE, text: next.text}], expect.any(Function));
+        expect(model.setValue).toHaveBeenCalledWith(next.text);
         expect(model.text).toBe(next.text);
     });
 });
