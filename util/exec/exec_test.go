@@ -3,6 +3,7 @@ package exec
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -156,7 +157,7 @@ func TestRunCommandSignal(t *testing.T) {
 	assert.Equal(t, "captured", output)
 	require.EqualError(t, err, "`sh -c trap 'trap - 15 && echo captured && exit' 15 && sleep 2` failed timeout after 200ms")
 
-	assert.Len(t, hook.Entries, 3)
+	assert.Len(t, hook.Entries, 4)
 }
 
 func TestTrimmedOutput(t *testing.T) {
@@ -230,7 +231,7 @@ func TestRunCommandTimeout(t *testing.T) {
 	assert.Equal(t, "hello world", output)
 	require.EqualError(t, err, "`sh -c echo hello world && echo my-error >&2 && sleep 2` failed timeout after 500ms")
 
-	assert.Len(t, hook.Entries, 3)
+	assert.Len(t, hook.Entries, 4)
 
 	entry := hook.Entries[0]
 	assert.Equal(t, log.InfoLevel, entry.Level)
@@ -245,6 +246,11 @@ func TestRunCommandTimeout(t *testing.T) {
 	assert.Contains(t, entry.Data, "execID")
 
 	entry = hook.Entries[2]
+	assert.Equal(t, log.InfoLevel, entry.Level)
+	assert.Equal(t, "terminated command", entry.Message)
+	assert.Equal(t, "timeout", entry.Data["cause"])
+
+	entry = hook.Entries[3]
 	assert.Equal(t, log.ErrorLevel, entry.Level)
 	assert.Equal(t, "`sh -c echo hello world && echo my-error >&2 && sleep 2` failed timeout after 500ms", entry.Message)
 	assert.Contains(t, entry.Data, "execID")
@@ -296,6 +302,71 @@ func TestRunCommandExt_processGroupOptOutKeepsParentGroup(t *testing.T) {
 	parentPGID, err := syscall.Getpgid(os.Getpid())
 	require.NoError(t, err)
 	assert.Equal(t, parentPGID, childPGID)
+}
+
+func TestLogTermination_recordsCause(t *testing.T) {
+	assertCause := func(t *testing.T, hook *test.Hook, cause string) {
+		t.Helper()
+		for _, entry := range hook.AllEntries() {
+			if entry.Data["cause"] != cause {
+				continue
+			}
+			assert.Equal(t, "terminated command", entry.Message)
+			assert.Contains(t, entry.Data, "execID")
+			assert.NotEmpty(t, entry.Data["execID"])
+			assert.NotZero(t, entry.Data["pid"])
+			return
+		}
+		t.Fatalf("no termination log with cause %q", cause)
+	}
+
+	t.Run("timeout", func(t *testing.T) {
+		hook := test.NewGlobal()
+		t.Cleanup(hook.Reset)
+		_, err := RunCommand("sleep", CmdOpts{Timeout: 200 * time.Millisecond}, "5")
+		require.Error(t, err)
+		assertCause(t, hook, "timeout")
+	})
+
+	t.Run("cancellation", func(t *testing.T) {
+		hook := test.NewGlobal()
+		t.Cleanup(hook.Reset)
+		ctx, cancel := context.WithCancel(t.Context())
+		cmd := CommandWithPolicy(ctx, DefaultPolicy(), "sleep", "30")
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_, _ = RunCommandExt(cmd, CmdOpts{Timeout: time.Minute})
+		}()
+		require.Eventually(t, func() bool { return cmd.Process != nil }, time.Second, 10*time.Millisecond)
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			t.Fatal("cancelled command did not return")
+		}
+		assertCause(t, hook, "cancellation")
+	})
+
+	t.Run("shutdown", func(t *testing.T) {
+		hook := test.NewGlobal()
+		t.Cleanup(hook.Reset)
+		ctx, cancel := context.WithCancelCause(t.Context())
+		cmd := CommandWithPolicy(ctx, DefaultPolicy(), "sleep", "30")
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_, _ = RunCommandExt(cmd, CmdOpts{Timeout: time.Minute})
+		}()
+		require.Eventually(t, func() bool { return cmd.Process != nil }, time.Second, 10*time.Millisecond)
+		cancel(errors.New("argocd-repo-server is shutting down"))
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			t.Fatal("shutdown did not stop the command")
+		}
+		assertCause(t, hook, "shutdown")
+	})
 }
 
 func TestCommandWithPolicy_isolateFalseKeepsParentGroup(t *testing.T) {

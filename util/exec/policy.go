@@ -38,5 +38,12 @@ func DefaultPolicy() Policy {
 func CommandWithPolicy(ctx context.Context, p Policy, name string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, name, args...)
 	applyIsolation(cmd, p)
+	cmd.Cancel = func() error {
+		LogTermination(ctx, cmd, TerminationCause(ctx))
+		return Signal(cmd, p.Signal)
+	}
+	if p.GracePeriod > 0 {
+		cmd.WaitDelay = p.GracePeriod
+	}
 	return cmd
 }

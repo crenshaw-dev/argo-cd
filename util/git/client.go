@@ -2337,6 +2337,7 @@ func (m *nativeGitClient) runCmdOutput(cmd *exec.Cmd, ropts runOpts) (string, er
 		if cmd.Process == nil {
 			return nil
 		}
+		executil.LogTermination(nil, cmd, "cancellation")
 		pid := cmd.Process.Pid
 		arm := func(f func()) {
 			timer := time.AfterFunc(gitCancelGracePeriod(), f)

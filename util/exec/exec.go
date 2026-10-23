@@ -42,6 +42,56 @@ func Signal(cmd *exec.Cmd, sig syscall.Signal) error {
 	return signalCmd(cmd, sig)
 }
 
+var execIDs sync.Map
+
+func rememberExecID(cmd *exec.Cmd, id string) {
+	execIDs.Store(cmd, id)
+}
+
+func forgetExecID(cmd *exec.Cmd) {
+	execIDs.Delete(cmd)
+}
+
+func lookupExecID(cmd *exec.Cmd) string {
+	id, ok := execIDs.Load(cmd)
+	if !ok {
+		return ""
+	}
+	return id.(string)
+}
+
+// terminationCause reports why ctx ended. A cause other than cancellation or a
+// deadline is a shutdown: the repo server uses its own error for that.
+func TerminationCause(ctx context.Context) string {
+	err := context.Cause(ctx)
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timeout"
+	case err != nil && !errors.Is(err, context.Canceled):
+		return "shutdown"
+	default:
+		return "cancellation"
+	}
+}
+
+// LogTermination records why this package signaled a command.
+func LogTermination(ctx context.Context, cmd *exec.Cmd, cause string) {
+	pid := 0
+	if cmd != nil && cmd.Process != nil {
+		pid = cmd.Process.Pid
+	}
+	contextCause := ""
+	if ctx != nil && context.Cause(ctx) != nil {
+		contextCause = context.Cause(ctx).Error()
+	}
+	logrus.WithFields(logrus.Fields{
+		"execID":       lookupExecID(cmd),
+		"pid":          pid,
+		"cause":        cause,
+		"contextCause": contextCause,
+	}).Info("terminated command")
+}
+
 type ExecRunOpts struct {
 	// Redactor redacts tokens from the output
 	Redactor func(text string) string
@@ -202,6 +252,8 @@ func RunCommandExt(cmd *exec.Cmd, opts CmdOpts) (string, error) {
 		return "", err
 	}
 	logCtx := logrus.WithFields(logrus.Fields{"execID": execId})
+	rememberExecID(cmd, execId)
+	defer forgetExecID(cmd)
 
 	redactor := DefaultCmdOpts.Redactor
 	if opts.Redactor != nil {
@@ -302,11 +354,13 @@ func RunCommandExt(cmd *exec.Cmd, opts CmdOpts) (string, error) {
 	trimmed := strings.TrimSuffix(output, "\n")
 
 	if fatalHit.Load() {
+		LogTermination(timeoutCtx, cmd, "timeout")
 		err = newCmdError(redactor(args), fmt.Errorf("fatal timeout after %v", timeout+fatalTimeout), "")
 		logCtx.Error(err.Error())
 		return trimmed, err
 	}
 	if timedOut.Load() {
+		LogTermination(timeoutCtx, cmd, "timeout")
 		err = newCmdError(redactor(args), fmt.Errorf("timeout after %v", timeout), "")
 		logCtx.Error(err.Error())
 		return trimmed, err

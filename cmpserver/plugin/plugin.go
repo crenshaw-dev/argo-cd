@@ -136,6 +136,7 @@ func runCommand(ctx context.Context, command Command, path string, env []string)
 		if alreadyExited || cmd.Process == nil {
 			return os.ErrProcessDone
 		}
+		argoexec.LogTermination(ctx, cmd, argoexec.TerminationCause(ctx))
 		err := argoexec.Signal(cmd, syscall.SIGTERM)
 		if errors.Is(err, os.ErrProcessDone) {
 			return err
