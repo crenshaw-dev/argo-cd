@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unicode"
@@ -24,14 +26,14 @@ import (
 var (
 	timeout                       time.Duration
 	fatalTimeout                  time.Duration
-	processGroupIsolationDisabled bool
+	processGroupIsolationDisabled atomic.Bool
 	Unredacted                    = Redact(nil)
 )
 
 // DisableProcessGroupIsolation keeps child processes in the caller's process
 // group. The argocd CLI uses this so Ctrl-C still reaches helm and kustomize.
 func DisableProcessGroupIsolation() {
-	processGroupIsolationDisabled = true
+	processGroupIsolationDisabled.Store(true)
 }
 
 type ExecRunOpts struct {
@@ -239,85 +241,78 @@ func RunCommandExt(cmd *exec.Cmd, opts CmdOpts) (string, error) {
 		return "", err
 	}
 
-	// Buffered so the timeout path can return without waiting on Wait. An
-	// unbuffered channel leaks the Wait goroutine, which blocks forever on send.
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-
-	var timoutCh <-chan time.Time
-	if timeout != 0 {
-		timoutCh = time.NewTimer(timeout).C
-	}
-
-	var fatalTimeoutCh <-chan time.Time
-	if fatalTimeout != 0 {
-		fatalTimeoutCh = time.NewTimer(timeout + fatalTimeout).C
-	}
-
 	timeoutBehavior := DefaultCmdOpts.TimeoutBehavior
-	fatalTimeoutBehaviour := syscall.SIGKILL
 	if opts.TimeoutBehavior.Signal != syscall.Signal(0) {
 		timeoutBehavior = opts.TimeoutBehavior
 	}
 
-	select {
-	// noinspection ALL
-	case <-timoutCh:
-		// send timeout signal
-		_ = signalCmd(cmd, timeoutBehavior.Signal)
-		// wait on timeout signal and fallback to fatal timeout signal
-		if timeoutBehavior.ShouldWait {
-			select {
-			case <-done: //nolint:errcheck // exit error after our signal is expected
-			case <-fatalTimeoutCh:
-				// upgrades to SIGKILL if cmd does not respect SIGTERM
-				_ = signalCmd(cmd, fatalTimeoutBehaviour)
-				// now original cmd should exit immediately after SIGKILL
-				<-done //nolint:errcheck
-				// return error with a marker indicating that cmd exited only after fatal SIGKILL
-				output := stdout.String()
-				if opts.CaptureStderr {
-					output += stderr.String()
-				}
-				logCtx.WithFields(logrus.Fields{"duration": time.Since(start)}).Debug(redactor(output))
-				err = newCmdError(redactor(args), fmt.Errorf("fatal timeout after %v", timeout+fatalTimeout), "")
-				logCtx.Error(err.Error())
-				return strings.TrimSuffix(output, "\n"), err
-			}
-		} else {
-			// Join the pipe-copy goroutines before reading the buffers. Reading them
-			// here used to race with os/exec still copying command output.
-			<-done //nolint:errcheck // the timeout error replaces the process exit error
-		}
-		output := stdout.String()
-		if opts.CaptureStderr {
-			output += stderr.String()
-		}
-		logCtx.WithFields(logrus.Fields{"duration": time.Since(start)}).Debug(redactor(output))
-		err = newCmdError(redactor(args), fmt.Errorf("timeout after %v", timeout), "")
-		logCtx.Error(err.Error())
-		return strings.TrimSuffix(output, "\n"), err
-	case err := <-done:
-		if err != nil {
-			output := stdout.String()
-			if opts.CaptureStderr {
-				output += stderr.String()
-			}
-			logCtx.WithFields(logrus.Fields{"duration": time.Since(start)}).Debug(redactor(output))
-			err := newCmdError(redactor(args), errors.New(redactor(err.Error())), strings.TrimSpace(redactor(stderr.String())))
-			if !opts.SkipErrorLogging {
-				logCtx.Error(err.Error())
-			}
-			return strings.TrimSuffix(output, "\n"), err
-		}
+	// The timeout is a context deadline. When it fires, the command is signaled
+	// and, if it should be given a grace period, SIGKILL follows fatalTimeout
+	// later. Wait itself is the only thing the caller blocks on: the deadline
+	// goroutine exits when this function cancels the context after Wait returns.
+	var timedOut atomic.Bool
+	var fatalHit atomic.Bool
+	stopFatal := make(chan struct{})
+	var timeoutWG sync.WaitGroup
+	timeoutCtx, cancelTimeout := context.WithCancel(context.Background())
+	if timeout > 0 {
+		timeoutCtx, cancelTimeout = context.WithTimeout(context.Background(), timeout)
 	}
+	defer cancelTimeout()
+	if timeout > 0 {
+		timeoutWG.Add(1)
+		go func() {
+			defer timeoutWG.Done()
+			<-timeoutCtx.Done()
+			if !errors.Is(timeoutCtx.Err(), context.DeadlineExceeded) {
+				return
+			}
+			timedOut.Store(true)
+			_ = signalCmd(cmd, timeoutBehavior.Signal)
+			if !timeoutBehavior.ShouldWait || fatalTimeout == 0 {
+				return
+			}
+			timer := time.NewTimer(fatalTimeout)
+			select {
+			case <-timer.C:
+				fatalHit.Store(true)
+				_ = signalCmd(cmd, syscall.SIGKILL)
+			case <-stopFatal:
+				timer.Stop()
+			}
+		}()
+	}
+
+	err = cmd.Wait()
+	cancelTimeout()
+	close(stopFatal)
+	timeoutWG.Wait()
+
 	output := stdout.String()
 	if opts.CaptureStderr {
 		output += stderr.String()
 	}
 	logCtx.WithFields(logrus.Fields{"duration": time.Since(start)}).Debug(redactor(output))
+	trimmed := strings.TrimSuffix(output, "\n")
 
-	return strings.TrimSuffix(output, "\n"), nil
+	if fatalHit.Load() {
+		err = newCmdError(redactor(args), fmt.Errorf("fatal timeout after %v", timeout+fatalTimeout), "")
+		logCtx.Error(err.Error())
+		return trimmed, err
+	}
+	if timedOut.Load() {
+		err = newCmdError(redactor(args), fmt.Errorf("timeout after %v", timeout), "")
+		logCtx.Error(err.Error())
+		return trimmed, err
+	}
+	if err != nil {
+		err = newCmdError(redactor(args), errors.New(redactor(err.Error())), strings.TrimSpace(redactor(stderr.String())))
+		if !opts.SkipErrorLogging {
+			logCtx.Error(err.Error())
+		}
+		return trimmed, err
+	}
+	return trimmed, nil
 }
 
 func RunCommand(name string, opts CmdOpts, arg ...string) (string, error) {

@@ -286,8 +286,8 @@ func TestRunCommandExt_timeoutKillsGrandchild(t *testing.T) {
 }
 
 func TestRunCommandExt_processGroupOptOutKeepsParentGroup(t *testing.T) {
-	processGroupIsolationDisabled = true
-	t.Cleanup(func() { processGroupIsolationDisabled = false })
+	processGroupIsolationDisabled.Store(true)
+	t.Cleanup(func() { processGroupIsolationDisabled.Store(false) })
 
 	out, err := RunCommand("sh", CmdOpts{}, "-c", "ps -o pgid= -p $$")
 	require.NoError(t, err)
