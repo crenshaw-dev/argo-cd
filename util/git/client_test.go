@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -691,6 +692,67 @@ func Test_gitCancelGracePeriod(t *testing.T) {
 		t.Setenv("ARGOCD_EXEC_FATAL_TIMEOUT", "0s")
 		assert.Equal(t, 10*time.Second, gitCancelGracePeriod())
 	})
+}
+
+func Test_nativeGitClient_Checkout_cancelKillsSmudgeFilter(t *testing.T) {
+	client, err := NewClientExt("file://"+t.TempDir(), t.TempDir(), NopCreds{}, true, false, "", "")
+	require.NoError(t, err)
+	require.NoError(t, client.Init())
+	root := client.Root()
+
+	require.NoError(t, os.WriteFile(filepath.Join(root, "file.txt"), []byte("first"), 0o644))
+	require.NoError(t, runCmd(t.Context(), root, "git", "add", "file.txt"))
+	require.NoError(t, runCmd(t.Context(), root, "git", "commit", "-m", "first"))
+	firstSHA, err := outputCmd(t.Context(), root, "git", "rev-parse", "HEAD")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(root, "file.txt"), []byte("second"), 0o644))
+	require.NoError(t, runCmd(t.Context(), root, "git", "commit", "-am", "second"))
+
+	pidFile := filepath.Join(t.TempDir(), "smudge.pid")
+	t.Cleanup(func() {
+		raw, err := os.ReadFile(pidFile)
+		if err != nil {
+			return
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(string(raw)))
+		if err != nil {
+			return
+		}
+		_ = syscall.Kill(pid, syscall.SIGKILL)
+	})
+	require.NoError(t, os.MkdirAll(filepath.Join(root, ".git", "info"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".git", "info", "attributes"), []byte("* filter=slow\n"), 0o644))
+	require.NoError(t, runCmd(t.Context(), root, "git", "config", "filter.slow.smudge", fmt.Sprintf("exec 2>/dev/null; echo $$ > '%s'; exec sleep 30", pidFile)))
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	checkoutErr := make(chan error, 1)
+	go func() {
+		_, err := client.Checkout(ctx, strings.TrimSpace(string(firstSHA)), false, false)
+		checkoutErr <- err
+	}()
+
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(pidFile)
+		return err == nil
+	}, 10*time.Second, 10*time.Millisecond, "checkout never reached the smudge filter")
+
+	cancel()
+
+	select {
+	case err := <-checkoutErr:
+		require.Error(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("checkout did not return after cancellation")
+	}
+
+	raw, err := os.ReadFile(pidFile)
+	require.NoError(t, err)
+	pid, err := strconv.Atoi(strings.TrimSpace(string(raw)))
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		return syscall.Kill(pid, 0) != nil
+	}, 2*time.Second, 20*time.Millisecond, "smudge filter %d is still running", pid)
 }
 
 func Test_nativeGitClient_runCmdOutput_killsProcessIgnoringSIGTERMAfterGracePeriod(t *testing.T) {

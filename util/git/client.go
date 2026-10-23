@@ -2325,9 +2325,39 @@ func (m *nativeGitClient) runCmdOutput(cmd *exec.Cmd, ropts runOpts) (string, er
 		}
 	}
 	cmd.Env = proxy.UpsertEnv(cmd, m.proxy, m.noProxy)
-	// On context cancellation, send SIGTERM (not os/exec's default SIGKILL) so git can
-	// remove its lock files; os/exec sends SIGKILL if git is still running after WaitDelay.
-	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	// On context cancellation, SIGTERM the process group so helpers git spawned
+	// (smudge filters, git-remote-https) exit too, and git can remove its locks.
+	// If that signal finds the process already gone, do not arm the SIGKILL timer:
+	// the pid may have been reused. The timer is stopped once Wait returns.
+	var (
+		timerMu   sync.Mutex
+		killTimer *time.Timer
+	)
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return nil
+		}
+		pid := cmd.Process.Pid
+		arm := func(f func()) {
+			timer := time.AfterFunc(gitCancelGracePeriod(), f)
+			timerMu.Lock()
+			killTimer = timer
+			timerMu.Unlock()
+		}
+		if err := signalProcessGroup(pid, syscall.SIGTERM); err != nil {
+			sigErr := cmd.Process.Signal(syscall.SIGTERM)
+			if errors.Is(sigErr, os.ErrProcessDone) {
+				return sigErr
+			}
+			if sigErr != nil {
+				return sigErr
+			}
+			arm(func() { _ = cmd.Process.Signal(syscall.SIGKILL) })
+			return nil
+		}
+		arm(func() { _ = signalProcessGroup(pid, syscall.SIGKILL) })
+		return nil
+	}
 	cmd.WaitDelay = gitCancelGracePeriod()
 	opts := executil.ExecRunOpts{
 		TimeoutBehavior: executil.TimeoutBehavior{
@@ -2339,5 +2369,12 @@ func (m *nativeGitClient) runCmdOutput(cmd *exec.Cmd, ropts runOpts) (string, er
 		Redactor:         ropts.Redactor,
 		StderrWriter:     ropts.StderrWriter,
 	}
-	return executil.RunWithExecRunOpts(cmd, opts)
+	out, err := executil.RunWithExecRunOpts(cmd, opts)
+	timerMu.Lock()
+	timer := killTimer
+	timerMu.Unlock()
+	if timer != nil {
+		timer.Stop()
+	}
+	return out, err
 }
