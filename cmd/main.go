@@ -24,6 +24,7 @@ import (
 	"github.com/argoproj/argo-cd/v3/cmd/util"
 	"github.com/argoproj/argo-cd/v3/common"
 	argoerrors "github.com/argoproj/argo-cd/v3/util/errors"
+	executil "github.com/argoproj/argo-cd/v3/util/exec"
 	"github.com/argoproj/argo-cd/v3/util/grpc"
 	"github.com/argoproj/argo-cd/v3/util/log"
 )
@@ -81,6 +82,9 @@ func main() {
 	command, isArgocdCLI := selectCommand(binaryName)
 
 	if isArgocdCLI {
+		// Child processes stay in this process group so Ctrl-C reaches them.
+		// Repo-server and the other binaries keep their own process groups.
+		executil.DisableProcessGroupIsolation()
 		// silence errors and usages since we'll be printing them manually.
 		// This is because if we execute a plugin, the initial
 		// errors and usage are always going to get printed that we don't want.

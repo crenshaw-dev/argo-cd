@@ -22,10 +22,17 @@ import (
 )
 
 var (
-	timeout      time.Duration
-	fatalTimeout time.Duration
-	Unredacted   = Redact(nil)
+	timeout                       time.Duration
+	fatalTimeout                  time.Duration
+	processGroupIsolationDisabled bool
+	Unredacted                    = Redact(nil)
 )
+
+// DisableProcessGroupIsolation keeps child processes in the caller's process
+// group. The argocd CLI uses this so Ctrl-C still reaches helm and kustomize.
+func DisableProcessGroupIsolation() {
+	processGroupIsolationDisabled = true
+}
 
 type ExecRunOpts struct {
 	// Redactor redacts tokens from the output
@@ -226,6 +233,7 @@ func RunCommandExt(cmd *exec.Cmd, opts CmdOpts) (string, error) {
 	}
 
 	start := time.Now()
+	setProcessGroup(cmd)
 	err = cmd.Start()
 	if err != nil {
 		return "", err
@@ -256,14 +264,14 @@ func RunCommandExt(cmd *exec.Cmd, opts CmdOpts) (string, error) {
 	// noinspection ALL
 	case <-timoutCh:
 		// send timeout signal
-		_ = cmd.Process.Signal(timeoutBehavior.Signal)
+		_ = signalCmd(cmd, timeoutBehavior.Signal)
 		// wait on timeout signal and fallback to fatal timeout signal
 		if timeoutBehavior.ShouldWait {
 			select {
 			case <-done: //nolint:errcheck // exit error after our signal is expected
 			case <-fatalTimeoutCh:
 				// upgrades to SIGKILL if cmd does not respect SIGTERM
-				_ = cmd.Process.Signal(fatalTimeoutBehaviour)
+				_ = signalCmd(cmd, fatalTimeoutBehaviour)
 				// now original cmd should exit immediately after SIGKILL
 				<-done //nolint:errcheck
 				// return error with a marker indicating that cmd exited only after fatal SIGKILL

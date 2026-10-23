@@ -3,9 +3,14 @@ package exec
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -257,6 +262,40 @@ func TestRunWithExecRunOptsCaptureStderr(t *testing.T) {
 	output, err := RunWithExecRunOpts(cmd, ExecRunOpts{CaptureStderr: true})
 	assert.Equal(t, "hello world\nmy-error", output)
 	assert.NoError(t, err)
+}
+
+func TestRunCommandExt_timeoutKillsGrandchild(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	cmd := exec.Command("sh", "-c", fmt.Sprintf("sleep 30 & echo $! > '%s'; wait", pidFile))
+	_, err := RunCommandExt(cmd, CmdOpts{
+		Timeout:      200 * time.Millisecond,
+		FatalTimeout: 500 * time.Millisecond,
+		TimeoutBehavior: TimeoutBehavior{
+			Signal:     syscall.SIGTERM,
+			ShouldWait: true,
+		},
+	})
+	require.Error(t, err)
+	raw, err := os.ReadFile(pidFile)
+	require.NoError(t, err)
+	pid, err := strconv.Atoi(strings.TrimSpace(string(raw)))
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		return syscall.Kill(pid, 0) != nil
+	}, 2*time.Second, 20*time.Millisecond, "grandchild %d is still running", pid)
+}
+
+func TestRunCommandExt_processGroupOptOutKeepsParentGroup(t *testing.T) {
+	processGroupIsolationDisabled = true
+	t.Cleanup(func() { processGroupIsolationDisabled = false })
+
+	out, err := RunCommand("sh", CmdOpts{}, "-c", "ps -o pgid= -p $$")
+	require.NoError(t, err)
+	childPGID, err := strconv.Atoi(strings.TrimSpace(out))
+	require.NoError(t, err)
+	parentPGID, err := syscall.Getpgid(os.Getpid())
+	require.NoError(t, err)
+	assert.Equal(t, parentPGID, childPGID)
 }
 
 func TestRunCommandExt_timeoutDoesNotRaceOnOutputBuffers(t *testing.T) {
