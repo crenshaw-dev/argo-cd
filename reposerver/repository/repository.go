@@ -959,6 +959,9 @@ func (s *Service) runManifestGenAsync(ctx context.Context, repoRoot, commitSHA, 
 			}
 		}
 
+		if hook, ok := ctx.Value(manifestGenHookKey{}).(func()); ok && hook != nil {
+			hook()
+		}
 		manifestGenResult, err = GenerateManifests(ctx, opContext.appPath, repoRoot, commitSHA, q, false, s.gitCredsStore, s.initConstants.MaxCombinedDirectoryManifestsSize, s.gitRepoPaths, WithCMPTarDoneChannel(ch.tarDoneCh), WithCMPTarExcludedGlobs(s.initConstants.CMPTarExcludedGlobs), WithCMPUseManifestGeneratePaths(s.initConstants.CMPUseManifestGeneratePaths))
 	}
 	refSourceCommitSHAs := make(map[string]string)
@@ -977,6 +980,13 @@ func (s *Service) runManifestGenAsync(ctx context.Context, repoRoot, commitSHA, 
 	})
 
 	if err != nil {
+		// A shutdown cancellation is not a bad manifest. Caching it would pause
+		// the repository for later requests. The git error path stringifies with
+		// %v, so the shutdown cause has to be read from the context.
+		if errors.Is(context.Cause(ctx), ErrShuttingDown) {
+			ch.errCh <- err
+			return
+		}
 		// If manifest generation error caching is enabled
 		if s.initConstants.PauseGenerationAfterFailedGenerationAttempts > 0 {
 			logCtx.Debug("getting manifests cache: GenerateManifests error")

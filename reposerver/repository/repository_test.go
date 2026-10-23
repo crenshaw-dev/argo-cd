@@ -992,6 +992,35 @@ func TestGenerateJsonnetImportDeviceFileOutsideRepoRoot(t *testing.T) {
 	}
 }
 
+func TestGenerateManifest_shutdownDoesNotCacheFailure(t *testing.T) {
+	service := newService(t, ".")
+	service.initConstants = RepoServerInitConstants{
+		ParallelismLimit: 1,
+		PauseGenerationAfterFailedGenerationAttempts: 2,
+	}
+	manifestRequest := &apiclient.ManifestRequest{
+		Repo:    &v1alpha1.Repository{},
+		AppName: "test",
+		ApplicationSource: &v1alpha1.ApplicationSource{
+			Path: "./testdata/invalid-helm",
+		},
+	}
+	ctx, cancel := context.WithCancelCause(t.Context())
+	defer cancel(context.Canceled)
+	ctx = withManifestGenHook(ctx, func() { cancel(ErrShuttingDown) })
+
+	_, err := service.GenerateManifest(ctx, manifestRequest)
+	require.Error(t, err)
+
+	cached := &cache.CachedManifestResponse{}
+	key := cache.NewManifestKey(mock.Anything, manifestRequest.ApplicationSource, manifestRequest.GetRefSources(), manifestRequest.GetNamespace(), manifestRequest.GetTrackingMethod(),
+		manifestRequest.GetAppLabelKey(), manifestRequest.GetAppName(), manifestRequest.GetInstallationID(), manifestRequest.GetSourceIntegrity(), manifestRequest, nil,
+	)
+	cacheErr := service.cache.GetManifests(key, cached)
+	require.ErrorIs(t, cacheErr, cache.ErrCacheMiss)
+	assert.Equal(t, 0, cached.NumberOfConsecutiveFailures)
+}
+
 func TestManifestGenErrorCacheByNumRequests(t *testing.T) {
 	// Returns the state of the manifest generation cache, by querying the cache for the previously set result
 	getRecentCachedEntry := func(service *Service, manifestRequest *apiclient.ManifestRequest) *cache.CachedManifestResponse {
