@@ -84,6 +84,7 @@ func NewCommand() *cobra.Command {
 		gitLsRemoteOptimizedEnabled        bool
 		clientCAPath                       string
 		disableTLS                         bool
+		shutdownDrainTimeout               time.Duration
 	)
 	command := cobra.Command{
 		Use:               common.CommandRepoServer,
@@ -140,6 +141,8 @@ func NewCommand() *cobra.Command {
 
 			askPassServer := askpass.NewServer(askpass.SocketPath)
 			metricsServer := metrics.NewMetricsServer()
+			shutdownCtx, shutdownCancel := context.WithCancelCause(context.Background())
+			defer shutdownCancel(context.Canceled)
 			cacheutil.CollectMetrics(redisClient, metricsServer, nil)
 			if disableTLS && clientCAPath != "" {
 				return stderrors.New("--client-ca-path cannot be used when --disable-tls is enabled")
@@ -167,7 +170,7 @@ func NewCommand() *cobra.Command {
 				GitLsRemoteOptimizedEnabled:                  gitLsRemoteOptimizedEnabled,
 				HelmUserAgent:                                helmUserAgent,
 				HelmChartCacheExpiration:                     repoCacheExpiration,
-			}, askPassServer, clientCAPath, disableTLS)
+			}, askPassServer, clientCAPath, disableTLS, shutdownCtx)
 			errors.CheckError(err)
 
 			if otlpAddress != "" {
@@ -236,8 +239,9 @@ func NewCommand() *cobra.Command {
 			// Graceful shutdown code adapted from https://gist.github.com/embano1/e0bf49d24f1cdd07cffad93097c04f0a
 			wg := sync.WaitGroup{}
 			wg.Go(func() {
-				<-ctx.Done()
-				grpc.GracefulStop()
+				drainThenCancel(ctx.Done(), grpc.GracefulStop, func() {
+					shutdownCancel(repository.ErrShuttingDown)
+				}, shutdownDrainTimeout)
 			})
 
 			log.Println("starting grpc server")
@@ -254,6 +258,7 @@ func NewCommand() *cobra.Command {
 	command.Flags().StringVar(&cmdutil.LogFormat, "logformat", env.StringFromEnv("ARGOCD_REPO_SERVER_LOGFORMAT", "json"), "Set the logging format. One of: json|text")
 	command.Flags().StringVar(&cmdutil.LogLevel, "loglevel", env.StringFromEnv("ARGOCD_REPO_SERVER_LOGLEVEL", "info"), "Set the logging level. One of: debug|info|warn|error")
 	command.Flags().Int64Var(&parallelismLimit, "parallelismlimit", int64(env.ParseNumFromEnv("ARGOCD_REPO_SERVER_PARALLELISM_LIMIT", 0, 0, math.MaxInt32)), "Limit on number of concurrent manifests generate requests. Any value less the 1 means no limit.")
+	command.Flags().DurationVar(&shutdownDrainTimeout, "shutdown-drain-timeout", env.ParseDurationFromEnv("ARGOCD_REPO_SERVER_SHUTDOWN_DRAIN_TIMEOUT", defaultShutdownDrainTimeout(), 0, math.MaxInt64), "How long to let in-flight requests finish after SIGTERM before cancelling them. Defaults to the Kubernetes default termination grace period (30s) minus ARGOCD_EXEC_FATAL_TIMEOUT, so a command can still exit before the kubelet sends SIGKILL. Set this to your pod's terminationGracePeriodSeconds minus ARGOCD_EXEC_FATAL_TIMEOUT when that grace period is not 30s.")
 	command.Flags().StringVar(&listenHost, "address", env.StringFromEnv("ARGOCD_REPO_SERVER_LISTEN_ADDRESS", common.DefaultAddressRepoServer), "Listen on given address for incoming connections")
 	command.Flags().IntVar(&listenPort, "port", common.DefaultPortRepoServer, "Listen on given port for incoming connections")
 	command.Flags().StringVar(&metricsHost, "metrics-address", env.StringFromEnv("ARGOCD_REPO_SERVER_METRICS_LISTEN_ADDRESS", common.DefaultAddressRepoServerMetrics), "Listen on given address for metrics")

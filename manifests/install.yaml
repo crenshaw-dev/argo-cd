@@ -35688,6 +35688,12 @@ spec:
               key: reposerver.parallelism.limit
               name: argocd-cmd-params-cm
               optional: true
+        - name: ARGOCD_REPO_SERVER_SHUTDOWN_DRAIN_TIMEOUT
+          valueFrom:
+            configMapKeyRef:
+              key: reposerver.shutdown.drain.timeout
+              name: argocd-cmd-params-cm
+              optional: true
         - name: ARGOCD_REPO_SERVER_LISTEN_ADDRESS
           valueFrom:
             configMapKeyRef:

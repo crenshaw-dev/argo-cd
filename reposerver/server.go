@@ -1,6 +1,7 @@
 package reposerver
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -46,7 +47,7 @@ type ArgoCDRepoServer struct {
 var tlsHostList = []string{"localhost", "reposerver"}
 
 // NewServer returns a new instance of the Argo CD Repo server
-func NewServer(metricsServer *metrics.MetricsServer, cache *reposervercache.Cache, tlsConfCustomizer tlsutil.ConfigCustomizer, initConstants repository.RepoServerInitConstants, gitCredsStore git.CredsStore, clientCAPath string, disableTLS bool) (*ArgoCDRepoServer, error) {
+func NewServer(metricsServer *metrics.MetricsServer, cache *reposervercache.Cache, tlsConfCustomizer tlsutil.ConfigCustomizer, initConstants repository.RepoServerInitConstants, gitCredsStore git.CredsStore, clientCAPath string, disableTLS bool, shutdownCtx context.Context) (*ArgoCDRepoServer, error) {
 	var tlsConfig *tls.Config
 	var healthCheckClientCert *tls.Certificate
 
@@ -97,11 +98,17 @@ func NewServer(metricsServer *metrics.MetricsServer, cache *reposervercache.Cach
 		serverMetrics.StreamServerInterceptor(),
 		recovery.StreamServerInterceptor(recovery.WithRecoveryHandler(grpc_util.LoggerRecoveryHandler(serverLog))),
 	}
+	if shutdownCtx != nil {
+		streamInterceptors = append([]grpc.StreamServerInterceptor{cancelOnShutdownStream(shutdownCtx)}, streamInterceptors...)
+	}
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		logging.UnaryServerInterceptor(grpc_util.InterceptorLogger(serverLog)),
 		serverMetrics.UnaryServerInterceptor(),
 		recovery.UnaryServerInterceptor(recovery.WithRecoveryHandler(grpc_util.LoggerRecoveryHandler(serverLog))),
 		grpc_util.ErrorSanitizerUnaryServerInterceptor(),
+	}
+	if shutdownCtx != nil {
+		unaryInterceptors = append([]grpc.UnaryServerInterceptor{cancelOnShutdownUnary(shutdownCtx)}, unaryInterceptors...)
 	}
 
 	serverOpts := []grpc.ServerOption{
