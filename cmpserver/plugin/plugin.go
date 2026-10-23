@@ -10,10 +10,10 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/golang/protobuf/ptypes/empty"
@@ -96,7 +96,15 @@ func runCommand(ctx context.Context, command Command, path string, env []string)
 		ctx, cancel = context.WithTimeout(ctx, pluginExecTimeout)
 		defer cancel()
 	}
-	cmd := exec.CommandContext(ctx, command.Command[0], append(command.Command[1:], command.Args...)...)
+	// Five seconds, not the exec fatal timeout: plugins have always had that long
+	// after SIGTERM to clean up before they are killed.
+	const pluginGracePeriod = 5 * time.Second
+	cmd := argoexec.CommandWithPolicy(ctx, argoexec.Policy{
+		Signal:      syscall.SIGTERM,
+		GracePeriod: pluginGracePeriod,
+		Timeout:     pluginExecTimeout,
+		Isolate:     true,
+	}, command.Command[0], append(command.Command[1:], command.Args...)...)
 
 	cmd.Env = env
 	cmd.Dir = path
@@ -116,8 +124,31 @@ func runCommand(ctx context.Context, command Command, path string, env []string)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	// Make sure the command is killed immediately on timeout. https://stackoverflow.com/a/38133948/684776
-	cmd.SysProcAttr = newSysProcAttr(true)
+	var (
+		exitMu    sync.Mutex
+		exited    bool
+		killTimer *time.Timer
+	)
+	cmd.Cancel = func() error {
+		exitMu.Lock()
+		alreadyExited := exited
+		exitMu.Unlock()
+		if alreadyExited || cmd.Process == nil {
+			return os.ErrProcessDone
+		}
+		err := argoexec.Signal(cmd, syscall.SIGTERM)
+		if errors.Is(err, os.ErrProcessDone) {
+			return err
+		}
+		timer := time.AfterFunc(pluginGracePeriod, func() {
+			_ = argoexec.Signal(cmd, syscall.SIGKILL)
+		})
+		exitMu.Lock()
+		killTimer = timer
+		exitMu.Unlock()
+		return err
+	}
+	cmd.WaitDelay = pluginGracePeriod
 
 	start := time.Now()
 	err = cmd.Start()
@@ -125,35 +156,14 @@ func runCommand(ctx context.Context, command Command, path string, env []string)
 		return "", err
 	}
 
-	var exitMu sync.Mutex
-	exited := false
-	go func() {
-		<-ctx.Done()
-		// The timeout context is cancelled when this function returns. Do not signal a
-		// process that has already been waited on.
-		exitMu.Lock()
-		alreadyExited := exited
-		exitMu.Unlock()
-		if alreadyExited {
-			return
-		}
-		// Kill by group ID to make sure child processes are killed. The - tells `kill` that it's a group ID.
-		// Since we didn't set Pgid in SysProcAttr, the group ID is the same as the process ID. https://pkg.go.dev/syscall#SysProcAttr
-
-		// Sending a TERM signal first to allow any potential cleanup if needed, and then sending a KILL signal
-		_ = sysCallTerm(-cmd.Process.Pid)
-
-		// modify cleanup timeout to allow process to cleanup
-		cleanupTimeout := 5 * time.Second
-		time.Sleep(cleanupTimeout)
-
-		_ = sysCallKill(-cmd.Process.Pid)
-	}()
-
 	err = cmd.Wait()
 	exitMu.Lock()
 	exited = true
+	timer := killTimer
 	exitMu.Unlock()
+	if timer != nil {
+		timer.Stop()
+	}
 
 	duration := time.Since(start)
 	output := stdout.String()

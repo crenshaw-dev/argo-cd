@@ -36,6 +36,12 @@ func DisableProcessGroupIsolation() {
 	processGroupIsolationDisabled.Store(true)
 }
 
+// Signal sends sig to cmd. A command started in its own process group is
+// signaled as a group, so children receive it too.
+func Signal(cmd *exec.Cmd, sig syscall.Signal) error {
+	return signalCmd(cmd, sig)
+}
+
 type ExecRunOpts struct {
 	// Redactor redacts tokens from the output
 	Redactor func(text string) string
