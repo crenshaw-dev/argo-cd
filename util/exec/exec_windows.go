@@ -7,6 +7,8 @@ import (
 	"syscall"
 )
 
+func applyIsolation(_ *exec.Cmd, _ Policy) {}
+
 func setProcessGroup(_ *exec.Cmd) {}
 
 func signalCmd(cmd *exec.Cmd, sig syscall.Signal) error {

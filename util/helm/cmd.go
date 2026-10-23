@@ -68,7 +68,7 @@ func (c Cmd) run(ctx context.Context, args ...string) (string, string, error) {
 }
 
 func (c Cmd) runWithStdin(ctx context.Context, stdin io.Reader, args ...string) (string, string, error) {
-	cmd := exec.CommandContext(ctx, "helm", args...)
+	cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), "helm", args...)
 	cmd.Dir = c.WorkDir
 	cmd.Env = os.Environ()
 	cmd.Stdin = stdin

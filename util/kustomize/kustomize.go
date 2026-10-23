@@ -163,7 +163,7 @@ func (k *kustomize) Build(opts *v1alpha1.ApplicationSourceKustomize, kustomizeOp
 
 	if opts != nil {
 		if opts.NamePrefix != "" {
-			cmd := exec.CommandContext(ctx, k.getBinaryPath(), "edit", "set", "nameprefix", "--", opts.NamePrefix)
+			cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), k.getBinaryPath(), "edit", "set", "nameprefix", "--", opts.NamePrefix)
 			cmd.Dir = k.path
 			commands = append(commands, executil.GetCommandArgsToLog(cmd))
 			_, err := executil.Run(cmd)
@@ -172,7 +172,7 @@ func (k *kustomize) Build(opts *v1alpha1.ApplicationSourceKustomize, kustomizeOp
 			}
 		}
 		if opts.NameSuffix != "" {
-			cmd := exec.CommandContext(ctx, k.getBinaryPath(), "edit", "set", "namesuffix", "--", opts.NameSuffix)
+			cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), k.getBinaryPath(), "edit", "set", "namesuffix", "--", opts.NameSuffix)
 			cmd.Dir = k.path
 			commands = append(commands, executil.GetCommandArgsToLog(cmd))
 			_, err := executil.Run(cmd)
@@ -189,7 +189,7 @@ func (k *kustomize) Build(opts *v1alpha1.ApplicationSourceKustomize, kustomizeOp
 				envSubstitutedImage := envVars.Envsubst(string(image))
 				args = append(args, envSubstitutedImage)
 			}
-			cmd := exec.CommandContext(ctx, k.getBinaryPath(), args...)
+			cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), k.getBinaryPath(), args...)
 			cmd.Dir = k.path
 			commands = append(commands, executil.GetCommandArgsToLog(cmd))
 			_, err := executil.Run(cmd)
@@ -210,7 +210,7 @@ func (k *kustomize) Build(opts *v1alpha1.ApplicationSourceKustomize, kustomizeOp
 				args = append(args, arg)
 			}
 
-			cmd := exec.CommandContext(ctx, k.getBinaryPath(), args...)
+			cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), k.getBinaryPath(), args...)
 			cmd.Dir = k.path
 			commands = append(commands, executil.GetCommandArgsToLog(cmd))
 			_, err := executil.Run(cmd)
@@ -235,7 +235,7 @@ func (k *kustomize) Build(opts *v1alpha1.ApplicationSourceKustomize, kustomizeOp
 			for name, value := range opts.CommonLabels {
 				commonLabels[name] = envVars.Envsubst(value)
 			}
-			cmd := exec.CommandContext(ctx, k.getBinaryPath(), append(args, mapToEditAddArgs(ctx, commonLabels)...)...)
+			cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), k.getBinaryPath(), append(args, mapToEditAddArgs(ctx, commonLabels)...)...)
 			cmd.Dir = k.path
 			commands = append(commands, executil.GetCommandArgsToLog(cmd))
 			_, err := executil.Run(cmd)
@@ -260,7 +260,7 @@ func (k *kustomize) Build(opts *v1alpha1.ApplicationSourceKustomize, kustomizeOp
 				commonAnnotations = opts.CommonAnnotations
 			}
 			args = append(args, mapToEditAddArgs(ctx, commonAnnotations)...)
-			cmd := exec.CommandContext(ctx, k.getBinaryPath(), args...)
+			cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), k.getBinaryPath(), args...)
 			cmd.Dir = k.path
 			commands = append(commands, executil.GetCommandArgsToLog(cmd))
 			_, err := executil.Run(cmd)
@@ -270,7 +270,7 @@ func (k *kustomize) Build(opts *v1alpha1.ApplicationSourceKustomize, kustomizeOp
 		}
 
 		if opts.Namespace != "" {
-			cmd := exec.CommandContext(ctx, k.getBinaryPath(), "edit", "set", "namespace", "--", opts.Namespace)
+			cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), k.getBinaryPath(), "edit", "set", "namespace", "--", opts.Namespace)
 			cmd.Dir = k.path
 			commands = append(commands, executil.GetCommandArgsToLog(cmd))
 			_, err := executil.Run(cmd)
@@ -375,7 +375,7 @@ func (k *kustomize) Build(opts *v1alpha1.ApplicationSourceKustomize, kustomizeOp
 			if len(foundComponents) > 0 {
 				args := []string{"edit", "add", "component"}
 				args = append(args, foundComponents...)
-				cmd := exec.CommandContext(ctx, k.getBinaryPath(), args...)
+				cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), k.getBinaryPath(), args...)
 				cmd.Dir = k.path
 				cmd.Env = env
 				commands = append(commands, executil.GetCommandArgsToLog(cmd))
@@ -390,9 +390,9 @@ func (k *kustomize) Build(opts *v1alpha1.ApplicationSourceKustomize, kustomizeOp
 	var cmd *exec.Cmd
 	if kustomizeOptions != nil && kustomizeOptions.BuildOptions != "" {
 		params := parseKustomizeBuildOptions(ctx, k, kustomizeOptions.BuildOptions, buildOpts)
-		cmd = exec.CommandContext(ctx, k.getBinaryPath(), params...)
+		cmd = executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), k.getBinaryPath(), params...)
 	} else {
-		cmd = exec.CommandContext(ctx, k.getBinaryPath(), "build", k.path)
+		cmd = executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), k.getBinaryPath(), "build", k.path)
 	}
 	cmd.Env = env
 	cmd.Env = proxy.UpsertEnv(cmd, k.proxy, k.noProxy)
@@ -501,7 +501,7 @@ func Version() (string, error) {
 
 func versionWithBinaryPath(ctx context.Context, k *kustomize) (string, error) {
 	executable := k.getBinaryPath()
-	cmd := exec.CommandContext(ctx, executable, "version", "--short")
+	cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), executable, "version", "--short")
 	// example version output:
 	// short: "{kustomize/v3.8.1  2020-07-16T00:58:46Z  }"
 	version, err := executil.Run(cmd)

@@ -7,8 +7,21 @@ import (
 	"syscall"
 )
 
+func applyIsolation(cmd *exec.Cmd, p Policy) {
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.Setpgid = p.Isolate && !processGroupIsolationDisabled.Load()
+}
+
 func setProcessGroup(cmd *exec.Cmd) {
-	if processGroupIsolationDisabled.Load() || cmd.SysProcAttr != nil {
+	if processGroupIsolationDisabled.Load() {
+		if cmd.SysProcAttr != nil {
+			cmd.SysProcAttr.Setpgid = false
+		}
+		return
+	}
+	if cmd.SysProcAttr != nil {
 		return
 	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

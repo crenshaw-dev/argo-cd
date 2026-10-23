@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -71,7 +70,7 @@ func ImportSigningKey(ctx context.Context, keyData []byte, passphrase string) (*
 	}
 	args = append(args, "--import")
 
-	cmd := exec.CommandContext(ctx, "gpg", args...)
+	cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), "gpg", args...)
 	cmd.Env = gpgEnv()
 	cmd.Stdin = strings.NewReader(string(keyData))
 	out, err := executil.Run(cmd)
@@ -186,7 +185,7 @@ func PresetSigningPassphrase(ctx context.Context, fingerprint, passphrase string
 		return err
 	}
 	for _, grip := range grips {
-		cmd := exec.CommandContext(ctx, bin, "--preset", grip)
+		cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), bin, "--preset", grip)
 		cmd.Env = gpgEnv()
 		cmd.Stdin = strings.NewReader(passphrase)
 		if _, err := executil.Run(cmd); err != nil {
@@ -201,7 +200,7 @@ func PresetSigningPassphrase(ctx context.Context, fingerprint, passphrase string
 // package but lives in libexec and is not on PATH, so it must be located
 // explicitly. A failure here at startup means the image is missing it.
 func presetPassphraseBin(ctx context.Context) (string, error) {
-	cmd := exec.CommandContext(ctx, "gpgconf", "--list-dirs", "libexecdir")
+	cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), "gpgconf", "--list-dirs", "libexecdir")
 	cmd.Env = gpgEnv()
 	out, err := executil.Run(cmd)
 	if err != nil {
@@ -219,7 +218,7 @@ func presetPassphraseBin(ctx context.Context) (string, error) {
 // idempotent and ships with gnupg.
 func reloadAgent(ctx context.Context) error {
 	for _, args := range [][]string{{"--launch", "gpg-agent"}, {"--reload", "gpg-agent"}} {
-		cmd := exec.CommandContext(ctx, "gpgconf", args...)
+		cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), "gpgconf", args...)
 		cmd.Env = gpgEnv()
 		if _, err := executil.Run(cmd); err != nil {
 			return fmt.Errorf("gpgconf %s failed: %w", strings.Join(args, " "), err)
@@ -233,7 +232,7 @@ func reloadAgent(ctx context.Context) error {
 // gpg-preset-passphrase. In `gpg --with-colons --with-keygrip` output every
 // sec/ssb record is followed by a grp record carrying that key's keygrip.
 func signingKeygrips(ctx context.Context, fingerprint string) ([]string, error) {
-	cmd := exec.CommandContext(ctx, "gpg",
+	cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), "gpg",
 		"--no-permission-warning",
 		"--with-colons",
 		"--with-keygrip",
@@ -282,7 +281,7 @@ func parseSigningKeygrips(colonOut string) []string {
 // sign with a dedicated signing subkey rather than the primary, so the caller
 // must accept any returned ID when verifying the freshly created commit.
 func signingKeyIDs(ctx context.Context, fingerprint string) ([]string, error) {
-	cmd := exec.CommandContext(ctx, "gpg",
+	cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), "gpg",
 		"--no-permission-warning",
 		"--with-colons",
 		"--list-secret-keys",

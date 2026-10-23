@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -173,7 +172,7 @@ func (c *nativeHelmChart) CleanChartCache(chart string, version string) error {
 
 func untarChart(ctx context.Context, tempDir string, cachedChartPath string, manifestMaxExtractedSize int64, disableManifestMaxExtractedSize bool) error {
 	if disableManifestMaxExtractedSize {
-		cmd := exec.CommandContext(ctx, "tar", "-zxvf", cachedChartPath)
+		cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), "tar", "-zxvf", cachedChartPath)
 		cmd.Dir = tempDir
 		_, err := executil.Run(cmd)
 		if err != nil {

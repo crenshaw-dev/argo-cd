@@ -298,6 +298,17 @@ func TestRunCommandExt_processGroupOptOutKeepsParentGroup(t *testing.T) {
 	assert.Equal(t, parentPGID, childPGID)
 }
 
+func TestCommandWithPolicy_isolateFalseKeepsParentGroup(t *testing.T) {
+	cmd := CommandWithPolicy(t.Context(), Policy{Isolate: false}, "sh", "-c", "ps -o pgid= -p $$")
+	out, err := RunCommandExt(cmd, CmdOpts{Timeout: 5 * time.Second})
+	require.NoError(t, err)
+	childPGID, err := strconv.Atoi(strings.TrimSpace(out))
+	require.NoError(t, err)
+	parentPGID, err := syscall.Getpgid(os.Getpid())
+	require.NoError(t, err)
+	assert.Equal(t, parentPGID, childPGID)
+}
+
 func TestRunCommandExt_timeoutDoesNotRaceOnOutputBuffers(t *testing.T) {
 	cmd := exec.CommandContext(t.Context(), "sh", "-c", "echo hi; sleep 1; echo bye")
 	_, err := RunCommandExt(cmd, CmdOpts{Timeout: 200 * time.Millisecond})

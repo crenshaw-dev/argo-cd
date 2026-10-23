@@ -653,7 +653,7 @@ func (m *nativeGitClient) IsRevisionPresent(ctx context.Context, revision string
 		return false
 	}
 
-	cmd := exec.CommandContext(ctx, "git", "cat-file", "-t", revision)
+	cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), "git", "cat-file", "-t", revision)
 	out, err := m.runCmdOutput(cmd, runOpts{SkipErrorLogging: true})
 	if out == "commit" && err == nil {
 		return true
@@ -1141,7 +1141,7 @@ func (m *nativeGitClient) runTargetedHeadFetch() (*plumbing.Reference, error) {
 	// the tree filter omits trees and blobs when the server supports filtering.
 	// This runs inside the shared optimized cache fill, so concurrent callers
 	// produce one bulk query and one HEAD query per cache refresh.
-	initCmd := exec.CommandContext(ctx, "git", "init", "--bare", "--quiet", ".")
+	initCmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), "git", "init", "--bare", "--quiet", ".")
 	if _, err := m.runCmdOutput(initCmd, runOpts{Dir: gitDir}); err != nil {
 		return nil, fmt.Errorf("failed to initialize temporary Git directory for HEAD resolution: %w", err)
 	}
@@ -1184,7 +1184,7 @@ func (m *nativeGitClient) runTargetedHeadFetch() (*plumbing.Reference, error) {
 
 	// The fetch output contains the tag object hash when HEAD points to an
 	// annotated tag. Peel it to a commit to match the existing go-git resolver.
-	peelCmd := exec.CommandContext(ctx, "git", "--git-dir=.", "rev-parse", "--verify", headRef.Hash().String()+"^{commit}")
+	peelCmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), "git", "--git-dir=.", "rev-parse", "--verify", headRef.Hash().String()+"^{commit}")
 	peeledOutput, err := m.runCmdOutput(peelCmd, runOpts{Dir: gitDir})
 	if err != nil {
 		return nil, fmt.Errorf("failed to peel targeted Git HEAD query result: %w", err)
@@ -1400,7 +1400,7 @@ func (m *nativeGitClient) RevisionMetadata(ctx context.Context, revision string)
 	authorDateUnixTimestamp, _ := strconv.ParseInt(segments[1], 10, 64)
 	message := strings.TrimSpace(segments[2])
 
-	cmd := exec.CommandContext(ctx, "git", "interpret-trailers", "--parse")
+	cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), "git", "interpret-trailers", "--parse")
 	cmd.Stdin = strings.NewReader(message)
 	out, err = m.runCmdOutput(cmd, runOpts{})
 	if err != nil {
@@ -1888,7 +1888,7 @@ func (m *nativeGitClient) getSealRevListFilter(ctx context.Context, revision str
 
 // IsAnnotatedTag returns true if the revision is an annotated tag existing in the repository, and false for everything else.
 func (m *nativeGitClient) IsAnnotatedTag(ctx context.Context, revision string) bool {
-	cmd := exec.CommandContext(ctx, "git", "cat-file", "-t", revision)
+	cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), "git", "cat-file", "-t", revision)
 	out, err := m.runCmdOutput(cmd, runOpts{SkipErrorLogging: true})
 	// a lightweight tag returns "commit" - makes sense in the git world
 	if err == nil && out == "tag" {
@@ -2212,14 +2212,14 @@ func (m *nativeGitClient) HasFileChanged(ctx context.Context, filePath string) (
 
 // cmdWithGPG creates git Cmd with a GPG-enabled environment
 func (m *nativeGitClient) cmdWithGPG(ctx context.Context, name string, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), name, args...)
 	cmd.Env = append(cmd.Env, "GNUPGHOME="+common.GetGnuPGHomePath(), "LANG=C")
 	return cmd
 }
 
 // runCmd is a convenience function to run a command in a given directory and return its output
 func (m *nativeGitClient) runCmd(ctx context.Context, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), "git", args...)
 	return m.runCmdOutput(cmd, runOpts{})
 }
 
@@ -2267,7 +2267,7 @@ func (m *nativeGitClient) runCredentialedCmdOutput(ctx context.Context, ropts ru
 
 	args = credentialedGitArgs(args, environ)
 
-	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd := executil.CommandWithPolicy(ctx, executil.DefaultPolicy(), "git", args...)
 	cmd.Env = append(cmd.Env, environ...)
 	return m.runCmdOutput(cmd, ropts)
 }
